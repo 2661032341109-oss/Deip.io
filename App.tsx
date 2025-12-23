@@ -9,7 +9,7 @@ import { GameCanvas, GameCanvasHandle } from './components/GameCanvas';
 import { HUD } from './components/HUD';
 import { EVOLUTION_TREE } from './constants';
 import { Persistence } from './engine/Persistence'; 
-import i18n from '../i18n';
+import i18n from './i18n';
 
 // HELPER: Centralized Logic for calculating available upgrades
 const calculateAvailableUpgrades = (currentWeaponId: string, currentLevel: number): WeaponSchema[] => {
@@ -289,3 +289,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+    
