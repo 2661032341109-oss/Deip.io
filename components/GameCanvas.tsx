@@ -50,6 +50,12 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
   const hasProcessedSave = useRef(false);
   const killFeedRef = useRef<KillFeedEntry[]>([]);
   
+  // Lazy init network manager to prevent render-phase errors
+  const networkRef = useRef<NetworkManager | null>(null);
+  if (!networkRef.current) {
+      networkRef.current = new NetworkManager();
+  }
+  
   const [isSpectating, setIsSpectating] = useState(false);
   const [showDebug, setShowDebug] = useState(false); 
   const spectateTargetRef = useRef<string | null>(null); 
@@ -90,7 +96,7 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
           size: Math.random() * 2 + 0.5, alpha: Math.random() * 0.5 + 0.3, layer: Math.random() * 2 + 0.1 
       }))),
       soundManager: useRef(soundManager), 
-      network: useRef(new NetworkManager()),
+      network: networkRef as React.MutableRefObject<NetworkManager>, // Cast to expected type
       settings: settingsRef,
       chatMessages: useRef<ChatMessage[]>([])
   };

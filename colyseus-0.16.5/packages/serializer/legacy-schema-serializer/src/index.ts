@@ -2,6 +2,8 @@
 
 
 
+
+
 import { Client, Serializer, Protocol, ClientState, debugPatch } from '@colyseus/core';
 import { dumpChanges, Reflection, Schema } from '@colyseus/schema';
 
@@ -11,7 +13,7 @@ export class SchemaSerializer<T> implements Serializer<T> {
   private state: T & Schema;
   private useFilters: boolean = false;
 
-  private handshakeCache: number[];
+  private handshakeCache: any;
 
   public reset(newState: T & Schema) {
     this.state = newState;

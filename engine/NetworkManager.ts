@@ -28,12 +28,21 @@ export class NetworkManager {
 
     constructor() {
         // Setup Colyseus Client
-        // In production, this should point to your deployed Colyseus server.
-        // For development, we assume localhost:2567 if not specified in env.
         const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-        // You might need to change 'localhost:2567' to your actual server if testing with friends over internet
-        const host = window.location.hostname === 'localhost' ? 'localhost:2567' : window.location.host; 
-        this.client = new Client(`${protocol}://${host}`);
+        let host = window.location.hostname === 'localhost' ? 'localhost:2567' : window.location.host;
+        
+        // Fallback if host is empty (e.g. running from file:// or some web containers)
+        if (!host || host === '') {
+            console.warn("NetworkManager: Hostname detection failed (possibly file://), defaulting to localhost:2567");
+            host = 'localhost:2567';
+        }
+
+        try {
+            this.client = new Client(`${protocol}://${host}`);
+        } catch (e) {
+            console.error("NetworkManager: Failed to initialize Client.", e);
+            this.client = null;
+        }
     }
 
     destroy() {
@@ -144,6 +153,8 @@ export class NetworkManager {
                     // Instead, reject the promise so the UI can show an error or retry.
                     reject(e);
                 }
+            } else {
+                 reject(new Error("Client not initialized (invalid host configuration)"));
             }
         });
     }
