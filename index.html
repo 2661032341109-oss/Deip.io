@@ -1,0 +1,114 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="format-detection" content="telephone=no">
+    <title>COREBOUND: EVO</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- LOAD FONTS -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@300;400;500;600;700&family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+JP:wght@400;700&family=Orbitron:wght@400;600;900&family=Prompt:wght@300;400;600;800&family=Rajdhani:wght@400;500;600;700&family=Sarabun:wght@300;400;600;800&display=swap" rel="stylesheet">
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['var(--font-dynamic)', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace'],
+            },
+            colors: {
+              neon: { blue: '#00f3ff', pink: '#ff0055', green: '#00ff9d', yellow: '#ffd700' },
+              glass: { surface: 'rgba(20, 20, 30, 0.6)', border: 'rgba(255, 255, 255, 0.1)', highlight: 'rgba(255, 255, 255, 0.05)' }
+            },
+            animation: {
+              'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'scanline': 'scanline 8s linear infinite',
+              'spin-slow': 'spin 3s linear infinite',
+            },
+            keyframes: {
+              scanline: { '0%': { transform: 'translateY(-100%)' }, '100%': { transform: 'translateY(100%)' } }
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      :root { --font-dynamic: 'Rajdhani', 'Chakra Petch', 'Noto Sans JP', sans-serif; }
+      [data-font="CORE"] { --font-dynamic: 'Rajdhani', 'Chakra Petch', 'Noto Sans JP', sans-serif; }
+      [data-font="CLEAN"] { --font-dynamic: 'Inter', 'Sarabun', 'Noto Sans JP', sans-serif; }
+      [data-font="STRIKE"] { --font-dynamic: 'Orbitron', 'Prompt', 'Noto Sans JP', sans-serif; }
+      [data-font="TERMINAL"] { --font-dynamic: 'JetBrains Mono', 'Sarabun', 'Noto Sans JP', monospace; }
+
+      html, body {
+        position: fixed; /* NUCLEAR OPTION: Prevents scrolling completely */
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overscroll-behavior: none; /* Stops pull-to-refresh / bounce */
+        touch-action: none; /* Stops generic browser gestures */
+        background-color: #050508;
+        color: #e0e0e0;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      
+      #root {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        top: 0;
+        left: 0;
+        overflow: hidden;
+      }
+
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar { width: 6px; }
+      ::-webkit-scrollbar-track { background: #0a0a0a; }
+      ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+      ::-webkit-scrollbar-thumb:hover { background: #00f3ff; }
+      
+      .glass-panel {
+        background: rgba(10, 10, 15, 0.85);
+        backdrop-filter: blur(0px);
+        -webkit-backdrop-filter: blur(0px);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        transform: translate3d(0,0,0);
+      }
+      .crt-overlay {
+        background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%);
+        background-size: 100% 4px;
+        pointer-events: none;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react/": "https://esm.sh/react@18.3.1/",
+    "react-dom": "https://esm.sh/react-dom@18.3.1",
+    "react-dom/": "https://esm.sh/react-dom@18.3.1/",
+    "lucide-react": "https://esm.sh/lucide-react@0.344.0?external=react",
+    "peerjs": "https://esm.sh/peerjs@1.5.2",
+    "framer-motion": "https://esm.sh/framer-motion@10.18.0?external=react,react-dom",
+    "i18next": "https://esm.sh/i18next@23.10.1",
+    "react-i18next": "https://esm.sh/react-i18next@14.1.0?external=react,react-dom,i18next",
+    "i18next-browser-languagedetector": "https://esm.sh/i18next-browser-languagedetector@7.2.0?external=i18next",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.7"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

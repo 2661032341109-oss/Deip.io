@@ -1,0 +1,5 @@
+{
+  "name": "Corebound: Evo",
+  "description": "A next-gen, pseudo-3D IO game engine prototype featuring high-fidelity glassmorphism UI, deep evolution trees, and config-driven architecture.",
+  "requestFramePermissions": []
+}
