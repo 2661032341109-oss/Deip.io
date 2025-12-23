@@ -36,6 +36,9 @@ export const useGameCore = (
     useEffect(() => {
         const initGameEngine = async () => {
             try {
+                // Ensure audio doesn't crash us, but initialize gracefully
+                // soundManager.initialize() is called on user click, not here.
+                
                 await new Promise(resolve => setTimeout(resolve, 500)); 
                 let networkRole: 'OFFLINE' | 'HOST' | 'CLIENT' = 'OFFLINE';
                 if (playerProfile.roomId) networkRole = 'CLIENT'; 
@@ -44,6 +47,7 @@ export const useGameCore = (
     
                 Logger.info(`Engine Initializing. Mode: ${networkRole}`);
     
+                // --- SETUP LISTENERS ---
                 context.network.current.onChatMessage = (msg: ChatMessage) => {
                     const exists = context.chatMessages.current.some(m => m.id === msg.id);
                     if (!exists) {
@@ -80,8 +84,28 @@ export const useGameCore = (
                     onGameOver();
                 };
     
-                const id = await context.network.current.init(networkRole, playerProfile.roomId);
-                Logger.net(`Network Initialized. ID: ${id}`);
+                // --- ROBUST NETWORK INIT WITH TIMEOUT FALLBACK ---
+                let id = 'offline-fallback';
+                try {
+                    // Create a timeout promise that rejects after 5 seconds
+                    const timeoutPromise = new Promise<string>((_, reject) => 
+                        setTimeout(() => reject(new Error('Network Timeout')), 5000)
+                    );
+                    
+                    // Race between network init and timeout
+                    id = await Promise.race([
+                        context.network.current.init(networkRole, playerProfile.roomId),
+                        timeoutPromise
+                    ]);
+                    
+                    Logger.net(`Network Initialized. ID: ${id}`);
+                } catch (netErr) {
+                    console.warn("Network init failed or timed out, falling back to OFFLINE mode.", netErr);
+                    Logger.warn("Network unavailable. Starting in Offline Mode.");
+                    // Force fallback
+                    context.network.current.role = 'OFFLINE';
+                    id = await context.network.current.init('OFFLINE');
+                }
                 
                 if (context.network.current.role === 'HOST') setRoomId(id);
                 else if (context.network.current.role === 'CLIENT') setRoomId(playerProfile.roomId || '');
@@ -89,9 +113,15 @@ export const useGameCore = (
                 context.deadEntities.current = new Array(200).fill(null).map(() => ({} as Entity));
                 context.deadParticles.current = new Array(400).fill(null).map(() => ({} as Particle));
     
+                // --- GAME START LOGIC ---
+                // Only spawn player if we are the Host or Offline (Client waits for snapshot)
                 if (context.network.current.role !== 'CLIENT') {
+                    Logger.game('Generating World...');
                     createMap(context, playerProfile.gameMode);
+                    
                     const startLevel = playerProfile.savedRun ? playerProfile.savedRun.level : 1;
+                    
+                    // Force spawn regardless of map gen success
                     spawnPlayer(context, activeWeaponId, playerProfile.gameMode, playerProfile.nickname, startLevel, playerProfile.teamId);
                     
                     const player = context.entities.current.find(e => e.id === 'player');
@@ -103,17 +133,25 @@ export const useGameCore = (
                         }
                         player.trailId = playerProfile.trailId;
                         player.flagId = playerProfile.flagId; 
+                    } else {
+                        Logger.error("CRITICAL: Player entity not found after spawn!");
                     }
+
                     sessionStats.current = { kills: 0, startTime: Date.now() / 1000, bossKills: 0 };
+                    
                     const initSpawnCount = playerProfile.gameMode === 'Mega' ? 120 : 60;
                     for (let i = 0; i < initSpawnCount; i++) spawnShape(context);
-                    Logger.game('Map generated & Player spawned');
+                    
+                    Logger.game('World Ready.');
+                } else {
+                    Logger.game('Waiting for Host Snapshot...');
                 }
                 
                 if (context.chatMessages.current.length === 0) {
                     const sysMsg = { id: 'sys-init', sender: 'SYSTEM', text: 'Chat Online. Press [ENTER] to talk.', timestamp: Date.now(), system: true };
                     context.chatMessages.current.push(sysMsg);
                 }
+                
                 setEngineState('READY');
             } catch (e: any) {
                 console.error("Engine Init Failed", e);
@@ -155,6 +193,7 @@ export const useGameCore = (
         }
         context.gameState.current.frames++; 
     
+        // Extraction Logic
         if (extractionRef.current.active) {
             const player = context.entities.current.find(e => e.id === 'player');
             if (player) {
@@ -188,10 +227,14 @@ export const useGameCore = (
             }
         }
     
-        if (context.soundManager.current) {
+        // Sound Engine Update (Safe)
+        if (context.soundManager.current && context.soundManager.current.masterGain) {
            const sm = context.soundManager.current;
            const vol = settings.audio.master / 100;
-           if (sm.masterGain.gain.value !== vol * 0.4) sm.masterGain.gain.value = vol * 0.4;
+           // Safe assignment check
+           if (sm.masterGain && sm.masterGain.gain.value !== vol * 0.4) {
+               sm.masterGain.gain.value = vol * 0.4;
+           }
         }
     
         const net = context.network.current;
@@ -255,22 +298,25 @@ export const useGameCore = (
             updatePhysics(context, activeWeaponId, onLevelUp, handleDeath, onKill);
     
         } else {
-            net.connections.forEach(conn => {
-                const exists = context.entities.current.find(e => e.ownerId === conn.peer);
-                if (!exists) {
-                    context.entities.current.push(recycleEntity(context, {
-                        id: `player-${conn.peer}`, type: EntityType.PLAYER,
-                        position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, radius: 24, rotation: 0,
-                        health: 100, maxHealth: 100, color: COLORS.player, depth: 10,
-                        name: `Operative ${conn.peer.substr(0,4)}`, weaponId: 'basic', teamId: 1, ownerId: conn.peer,
-                        barrelRecoils: [0], score: 0, level: 1
-                    }));
-                }
-            });
+            // HOST or OFFLINE Logic
+            if (net.role === 'HOST') {
+                net.connections.forEach(conn => {
+                    const exists = context.entities.current.find(e => e.ownerId === conn.peer);
+                    if (!exists) {
+                        context.entities.current.push(recycleEntity(context, {
+                            id: `player-${conn.peer}`, type: EntityType.PLAYER,
+                            position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, radius: 24, rotation: 0,
+                            health: 100, maxHealth: 100, color: COLORS.player, depth: 10,
+                            name: `Operative ${conn.peer.substr(0,4)}`, weaponId: 'basic', teamId: 1, ownerId: conn.peer,
+                            barrelRecoils: [0], score: 0, level: 1
+                        }));
+                    }
+                });
+            }
     
             updatePhysics(context, activeWeaponId, onLevelUp, handleDeath, onKill);
             
-            // Particle & Shockwave Cleanup
+            // Particle Cleanup
             for (let i = context.particles.current.length - 1; i >= 0; i--) { 
                 const p = context.particles.current[i]; 
                 if (p.type === 'muzzle_flash') p.life -= 0.15; 
