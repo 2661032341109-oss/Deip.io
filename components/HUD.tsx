@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { GameStats, WeaponSchema, SandboxOptions } from '../types';
 import { UPGRADE_TEMPLATE, COLORS } from '../constants';
-import { Skull, List, ChevronDown, ChevronUp, Terminal, Hexagon, Shield, LogOut, Loader2, Link } from 'lucide-react';
+import { Skull, List, ChevronDown, ChevronUp, Terminal, Hexagon, Shield, LogOut, Loader2 } from 'lucide-react';
 import { soundManager } from '../engine/SoundManager';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
@@ -39,7 +39,6 @@ export const HUD: React.FC<HUDProps> = ({
   const [showStatsMobile, setShowStatsMobile] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [settings] = useState(Persistence.loadSettings()); 
-  const [copyFeedback, setCopyFeedback] = useState(false);
 
   useEffect(() => {
       const checkMobile = () => setIsMobile(window.innerWidth < 768);
@@ -47,15 +46,6 @@ export const HUD: React.FC<HUDProps> = ({
       window.addEventListener('resize', checkMobile);
       return () => window.removeEventListener('resize', checkMobile);
   }, []);
-
-  const handleCopyLink = () => {
-      // Logic handled by wrapping component or URL is consistent
-      navigator.clipboard.writeText(window.location.href).then(() => {
-          soundManager.playUiClick();
-          setCopyFeedback(true);
-          setTimeout(() => setCopyFeedback(false), 2000);
-      });
-  };
 
   const currentStats = stats.stats || UPGRADE_TEMPLATE;
   const hasUpgrades = stats.upgradesAvailable > 0;
@@ -127,14 +117,7 @@ export const HUD: React.FC<HUDProps> = ({
            </div>
 
            {settings.interface.showNetGraph && (
-               <div className="flex gap-2">
-                   <div className="text-[9px] font-mono text-gray-500 bg-black/40 px-2 py-1 rounded self-start mt-1 backdrop-blur-sm border border-white/5">FPS: <span className="text-green-400">{stats.fps}</span></div>
-                   {window.location.search.includes('room=') && (
-                       <button onClick={handleCopyLink} className="pointer-events-auto text-[9px] font-mono text-cyan-400 bg-cyan-900/40 hover:bg-cyan-900/60 px-2 py-1 rounded self-start mt-1 backdrop-blur-sm border border-cyan-500/30 flex items-center gap-1 transition-all">
-                           {copyFeedback ? 'COPIED!' : <><Link className="w-3 h-3" /> INVITE</>}
-                       </button>
-                   )}
-               </div>
+               <div className="text-[9px] font-mono text-gray-500 bg-black/40 px-2 py-1 rounded self-start mt-1 backdrop-blur-sm border border-white/5">FPS: <span className="text-green-400">{stats.fps}</span> | PING: <span className="text-yellow-400">24ms</span></div>
            )}
 
            <div className="flex flex-col gap-1 mt-2 origin-top-left pointer-events-auto" onTouchStart={stopProp} onMouseDown={stopProp}>

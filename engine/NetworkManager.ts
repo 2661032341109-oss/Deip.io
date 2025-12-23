@@ -12,256 +12,170 @@ export class NetworkManager {
     role: NetworkRole = 'OFFLINE';
     connections: any[] = []; 
     hostConnection: any | null = null; 
-    
     myId: string = '';
     
-    // Maps PeerID -> Input State
     latestInput: Map<string, NetInput> = new Map(); 
     latestSnapshot: NetSnapshot | null = null; 
     
     onChatMessage: ((msg: ChatMessage) => void) | null = null;
     onPlayerDisconnect: ((peerId: string) => void) | null = null;
     onHostDisconnect: (() => void) | null = null;
-    
-    // NEW: Callback when we successfully join and get our ID
-    onGameJoined: ((myPlayerId: string) => void) | null = null;
 
     constructor() {
         this.latestInput = new Map();
     }
 
     destroy() {
-        console.log('[NET] Destroying Network Manager...');
         this.connections.forEach(c => c.close());
         this.connections = [];
-        if (this.hostConnection) {
-            this.hostConnection.close();
-            this.hostConnection = null;
-        }
-        if (this.peer) {
-            this.peer.destroy();
-            this.peer = null;
-        }
+        if (this.hostConnection) this.hostConnection.close();
+        if (this.peer) this.peer.destroy();
         this.role = 'OFFLINE';
     }
 
     async init(role: NetworkRole, roomId?: string): Promise<string> {
         this.role = role;
-        
         return new Promise((resolve, reject) => {
             if (role === 'OFFLINE') {
-                this.myId = 'player-HOST'; // Offline plays as Host ID implicitly
+                this.myId = `local-${Math.random().toString(36).substr(2, 9)}`;
                 resolve(this.myId);
                 return;
             }
 
+            let hasSwitched = false;
+            let connectionTimeout: any = null;
+
+            const switchToHost = async () => {
+                if (hasSwitched) return;
+                hasSwitched = true;
+                if (connectionTimeout) clearTimeout(connectionTimeout);
+                if (this.peer) {
+                    this.peer.removeAllListeners();
+                    this.peer.destroy();
+                    this.peer = null;
+                }
+                // Random delay to avoid simultaneous hosting collisions
+                await new Promise(r => setTimeout(r, Math.random() * 500 + 200));
+                this.init('HOST', roomId).then(resolve).catch(reject);
+            };
+
             if (role === 'CLIENT' && roomId) {
-                 this.peer = new Peer({ debug: 0 });
-                 
+                 this.peer = new Peer({ debug: 1 });
                  this.peer.on('open', (id) => {
                      this.myId = id;
-                     console.log(`[NET] Client ID: ${id}, Connecting to: ${roomId}`);
-                     
-                     const conn = this.peer!.connect(roomId, { reliable: false });
-                     
-                     conn.on('open', () => {
-                         console.log(`[NET] Connected to Host.`);
-                         this.hostConnection = conn;
-                         
-                         // Send HELLO to request join
-                         conn.send({ type: 'HELLO', payload: { name: 'Player' } });
+                     connectionTimeout = setTimeout(() => {
+                         if (!hasSwitched) switchToHost();
+                     }, 4000);
 
+                     const conn = this.peer!.connect(roomId, { reliable: false });
+                     conn.on('open', () => {
+                         if (hasSwitched) { conn.close(); return; }
+                         clearTimeout(connectionTimeout);
+                         this.hostConnection = conn;
                          conn.on('data', (data: any) => {
-                             if (data.type === 'WELCOME') {
-                                 // Host assigned us an ID (usually our PeerID)
-                                 console.log(`[NET] Joined Game as ${data.payload.id}`);
-                                 if (this.onGameJoined) this.onGameJoined(data.payload.id);
-                                 resolve(roomId);
-                             } 
-                             else if (data.type === 'SNAPSHOT') {
+                             if (data.type === 'SNAPSHOT') {
                                  this.latestSnapshot = data.payload;
-                                 if (data.payload.chat && this.onChatMessage) {
-                                     data.payload.chat.forEach((msg: ChatMessage) => this.onChatMessage!(msg));
-                                 }
-                             } 
-                             else if (data.type === 'CHAT' && this.onChatMessage) {
-                                 this.onChatMessage(data.payload);
+                                 if (data.payload.chat) data.payload.chat.forEach((m: ChatMessage) => this.onChatMessage?.(m));
+                             } else if (data.type === 'CHAT') {
+                                 this.onChatMessage?.(data.payload);
                              }
                          });
-                         
-                         conn.on('close', () => {
-                             if (this.onHostDisconnect) this.onHostDisconnect();
-                         });
-                     });
-
-                     conn.on('error', (err) => {
-                         console.error('[NET] Connection Error:', err);
-                         // Fallback logic could go here
+                         conn.on('close', () => this.onHostDisconnect?.());
+                         resolve(roomId);
                      });
                  });
-                 
-                 this.peer.on('error', (err) => reject(err));
-
+                 this.peer.on('error', (err: any) => { if (!hasSwitched) switchToHost(); });
             } else if (role === 'HOST' && roomId) {
                  this.role = 'HOST';
-                 // Host always plays as 'player-HOST' internally, or use PeerID
-                 // For consistency, let's wait for Open
-                 this.peer = new Peer(roomId, { debug: 0 });
-
-                 this.peer.on('open', (id) => {
-                     this.myId = id;
-                     console.log(`[NET] Hosting Room: ${id}`);
-                     resolve(id);
-                 });
-
+                 this.peer = new Peer(roomId, { debug: 1 });
+                 this.peer.on('open', (id) => { this.myId = id; resolve(id); });
                  this.peer.on('connection', (conn) => {
-                    console.log(`[NET] Client connected: ${conn.peer}`);
                     this.connections.push(conn);
-                    
                     conn.on('data', (data: any) => {
-                        if (data.type === 'HELLO') {
-                            // Client wants to join. Acknowledge them.
-                            // We use their PeerID as the entity ownerId
-                            conn.send({ type: 'WELCOME', payload: { id: conn.peer } });
-                        }
-                        else if (data.type === 'INPUT') {
-                            // Store input mapped to the CLIENT'S PEER ID
-                            this.latestInput.set(conn.peer, data.payload);
-                        } 
+                        if (data.type === 'INPUT') this.latestInput.set(conn.peer, data.payload);
                         else if (data.type === 'CHAT') {
-                            if (this.onChatMessage) this.onChatMessage(data.payload);
+                            this.onChatMessage?.(data.payload);
                             this.broadcastChat(data.payload);
                         }
                     });
-
                     conn.on('close', () => {
                         this.connections = this.connections.filter(c => c.peer !== conn.peer);
                         this.latestInput.delete(conn.peer);
-                        if (this.onPlayerDisconnect) this.onPlayerDisconnect(conn.peer);
+                        this.onPlayerDisconnect?.(conn.peer);
                     });
                  });
-
-                 this.peer.on('error', (err) => {
-                     console.error('[NET] Host Error:', err);
-                     reject(err); // Or handle auto-retry
+                 this.peer.on('error', (err: any) => {
+                     if (err.type === 'unavailable-id') switchToHost();
+                     else reject(err);
                  });
             }
         });
     }
 
-    // --- CLIENT: Interpolation Logic ---
     applySnapshot(context: GameContext, predictionEnabled: boolean, interpDelay: number) {
         if (!this.latestSnapshot) return;
-        
         const snap = this.latestSnapshot;
         const matchedIds = new Set<string>();
-        const lerpFactor = 0.3; // Smoother interpolation
+        const lerpFactor = 0.15; // Balanced interpolation
 
-        // 1. Process Entities
         snap.entities.forEach(sData => {
             if (!sData.id) return;
             matchedIds.add(sData.id);
-            
-            // Find entity by ID
             let local = context.entities.current.find(e => e.id === sData.id);
-            const isMyPlayer = local && local.ownerId === this.myId;
-
+            
             if (local) {
-                // If it's ME, I might predict movement (Client Prediction), 
-                // BUT for now, to fix "possession", let's trust Server Position mostly
-                // or only reconcile if deviation is too large.
-                
-                if (isMyPlayer && predictionEnabled) {
-                    // Reconciliation: If we drifted too far from server, snap back
-                    if (sData.position) {
-                        const dist = Math.sqrt(Math.pow(local.position.x - sData.position.x, 2) + Math.pow(local.position.y - sData.position.y, 2));
-                        if (dist > 100) { 
-                            // Lag snap
-                            local.position.x = sData.position.x;
-                            local.position.y = sData.position.y;
-                        }
-                        // Else: Trust local physics (calculated in useGameCore loop)
-                    }
-                } else {
-                    // It's OTHER players or objects. Strictly interpolate.
-                    if (sData.position) {
-                        local.targetPosition = sData.position;
-                        local.position.x = lerp(local.position.x, sData.position.x, lerpFactor);
-                        local.position.y = lerp(local.position.y, sData.position.y, lerpFactor);
-                    }
-                    if (sData.rotation !== undefined) {
-                        local.rotation = lerpAngle(local.rotation, sData.rotation, lerpFactor);
-                    }
+                const isMyPlayer = local.ownerId === this.myId;
+                if (sData.position && !isMyPlayer) {
+                    local.position.x = lerp(local.position.x, sData.position.x, lerpFactor);
+                    local.position.y = lerp(local.position.y, sData.position.y, lerpFactor);
                 }
-
-                // Sync stats for EVERYONE
+                if (sData.rotation !== undefined && !isMyPlayer) local.rotation = lerpAngle(local.rotation, sData.rotation, 0.2);
                 if (sData.health !== undefined) local.health = sData.health;
                 if (sData.maxHealth !== undefined) local.maxHealth = sData.maxHealth;
                 if (sData.score !== undefined) local.score = sData.score;
                 if (sData.level !== undefined) local.level = sData.level;
-                if (sData.statusEffects) local.statusEffects = sData.statusEffects;
-                if (sData.chatText !== undefined) local.chatText = sData.chatText;
-                if (sData.chatTimer !== undefined) local.chatTimer = sData.chatTimer;
-
+                if (sData.weaponId) local.weaponId = sData.weaponId;
             } else {
-                // NEW ENTITY: Spawn it
                 const newEnt = recycleEntity(context, sData);
-                // Ensure position is valid
-                if (sData.position) {
-                    newEnt.position.x = sData.position.x;
-                    newEnt.position.y = sData.position.y;
-                }
+                // DROP-IN EFFECT FOR NEW ENTITIES
+                // @ts-ignore
+                newEnt.isDropIn = true; 
+                // @ts-ignore
+                newEnt.dropInTimer = 60;
                 context.entities.current.push(newEnt);
             }
         });
 
-        // 2. Remove Missing Entities (Except local particle effects)
+        // Instant cleanup of dead/left entities
         for (let i = context.entities.current.length - 1; i >= 0; i--) {
             const e = context.entities.current[i];
-            // Don't delete client-side only effects if any (future proofing)
-            // But strictly sync game entities
-            if (!matchedIds.has(e.id)) {
+            if (!matchedIds.has(e.id) && e.type !== 'WALL' && e.type !== 'ZONE') {
                 removeEntity(context, i);
             }
         }
+        
+        if (snap.particles) context.particles.current = snap.particles.map(d => recycleParticle(context, d));
     }
 
-    // --- HOST: Broadcast ---
     broadcastSnapshot(entities: Entity[], particles: Particle[]) {
         if (this.role !== 'HOST') return;
-
         const snapshot: NetSnapshot = {
             entities: entities.map(e => ({
-                id: e.id,
-                type: e.type,
-                position: e.position,
-                radius: e.radius,
-                rotation: e.rotation,
-                color: e.color,
-                health: e.health,
-                maxHealth: e.maxHealth,
-                weaponId: e.weaponId,
-                statusEffects: e.statusEffects,
-                ownerId: e.ownerId, // Crucial for client to know "Is this me?"
-                score: e.score,
-                level: e.level,
-                name: e.name,
-                teamId: e.teamId
+                id: e.id, type: e.type, position: e.position, radius: e.radius, rotation: e.rotation,
+                color: e.color, health: e.health, maxHealth: e.maxHealth, weaponId: e.weaponId,
+                teamId: e.teamId, name: e.name, ownerId: e.ownerId, score: e.score, level: e.level
             })),
-            particles: [], // Particles are visual-only, save bandwidth by not syncing heavy particles
+            particles: particles.slice(0, 30).map(p => ({
+                id: p.id, position: p.position, size: p.size, color: p.color, life: p.life, type: p.type
+            })),
             timestamp: Date.now()
         };
-
-        this.connections.forEach(conn => {
-            conn.send({ type: 'SNAPSHOT', payload: snapshot });
-        });
+        this.connections.forEach(conn => conn.send({ type: 'SNAPSHOT', payload: snapshot }));
     }
 
     broadcastChat(msg: ChatMessage) {
         if (this.role !== 'HOST') return;
-        this.connections.forEach(conn => {
-            conn.send({ type: 'CHAT', payload: msg });
-        });
+        this.connections.forEach(conn => conn.send({ type: 'CHAT', payload: msg }));
     }
 
     getClientInput(peerId: string): NetInput | undefined {
@@ -274,10 +188,7 @@ export class NetworkManager {
     }
 
     sendChat(msg: ChatMessage) {
-        if (this.role === 'HOST') {
-            this.broadcastChat(msg);
-        } else if (this.hostConnection) {
-            this.hostConnection.send({ type: 'CHAT', payload: msg });
-        }
+        if (this.role === 'HOST') this.broadcastChat(msg);
+        else if (this.hostConnection) this.hostConnection.send({ type: 'CHAT', payload: msg });
     }
 }

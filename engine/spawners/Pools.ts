@@ -1,30 +1,11 @@
 
-import { Entity, Particle, EntityType } from '../../types';
+import { Entity, Particle } from '../../types';
 import { GameContext } from '../GameContext';
 
 export const recycleEntity = (ctx: GameContext, base: Partial<Entity>): Entity => {
     let e: Entity;
-    
-    // Default structure to prevent "undefined reading x" crashes
-    const defaults = {
-        position: { x: 0, y: 0 },
-        velocity: { x: 0, y: 0 },
-        radius: 10,
-        rotation: 0,
-        health: 100,
-        maxHealth: 100,
-        color: '#ffffff',
-        type: EntityType.DUMMY_TARGET,
-        id: `temp-${Math.random()}`,
-        statusEffects: [],
-        depth: 10,
-        teamId: 0
-    };
-
     if (ctx.deadEntities.current.length > 0) {
         e = ctx.deadEntities.current.pop()!;
-        
-        // Clear dirty properties
         e.statusEffects = [];
         e.barrelRecoils = undefined;
         e.ownerId = undefined;
@@ -35,46 +16,21 @@ export const recycleEntity = (ctx: GameContext, base: Partial<Entity>): Entity =
         e.width = undefined;
         e.height = undefined;
         e.baseRadius = undefined;
-        e.chatText = undefined;
-        e.chatTimer = undefined;
-        
-        // Merge defaults -> then base values
-        // This ensures e.position is NEVER undefined
-        Object.assign(e, defaults, base);
-        
-        // Double safety check
-        if (!e.position) e.position = { x: 0, y: 0 };
-        if (!e.velocity) e.velocity = { x: 0, y: 0 };
-        
+        Object.assign(e, base);
     } else {
-        // Create fresh
-        e = { ...defaults, ...base } as Entity;
+        e = base as Entity;
+        if (!e.statusEffects) e.statusEffects = [];
     }
-    
     return e;
 };
 
 export const recycleParticle = (ctx: GameContext, base: Partial<Particle>): Particle => {
     let p: Particle;
-    const defaults = {
-        position: { x: 0, y: 0 },
-        velocity: { x: 0, y: 0 },
-        life: 1.0,
-        maxLife: 1.0,
-        size: 5,
-        color: '#fff',
-        type: 'smoke',
-        id: `p-${Math.random()}`
-    };
-
     if (ctx.deadParticles.current.length > 0) {
         p = ctx.deadParticles.current.pop()!;
-        Object.assign(p, defaults, base);
-        // Safety checks
-        if (!p.position) p.position = { x: 0, y: 0 };
-        if (!p.velocity) p.velocity = { x: 0, y: 0 };
+        Object.assign(p, base);
     } else {
-        p = { ...defaults, ...base } as Particle;
+        p = base as Particle;
     }
     return p;
 };

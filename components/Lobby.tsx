@@ -3,18 +3,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ViewState, PlayerProfile, AccountData, Mission, LeaderboardEntry, WeaponSchema } from '../types';
 import { MODES, EVOLUTION_TREE, COLORS } from '../constants';
 import { Persistence, getRankInfo, getLevelProgress, RANK_DEFINITIONS, SHOP_ITEMS } from '../engine/Persistence';
-import { Settings, BookOpen, Activity, Users, ShieldCheck, Loader2, HelpCircle, X, Target, ShoppingBag, Star, Zap, Clock, Skull, CheckCircle, Crown, Medal, Lock, TrendingUp, Gift, PlayCircle, AlertTriangle, Database, Code, LogIn, LogOut, Mail, Fingerprint, RefreshCw, User, Globe, Edit3, Timer, Award, Flag, ChevronRight, Wifi, WifiOff, Swords, Shield, Link } from 'lucide-react';
+import { Settings, BookOpen, Activity, Users, ShieldCheck, Loader2, HelpCircle, X, Target, ShoppingBag, Star, Zap, Clock, Skull, CheckCircle, Crown, Medal, Lock, TrendingUp, Gift, PlayCircle, AlertTriangle, Database, Code, LogIn, LogOut, Mail, Fingerprint, RefreshCw, User, Globe, Edit3, Timer, Award, Flag, ChevronRight, Wifi, WifiOff, Swords, Shield } from 'lucide-react';
 import { soundManager } from '../engine/SoundManager';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './Button';
 import { useTranslation } from 'react-i18next';
 import { TankPreview } from './TankPreview'; 
 
-// ... (MissionCard, AuthModal, ProfileModal, LeaderboardOverlay, TeamSelectionModal components stay exactly the same as provided in context) ...
-// (Omitting them here for brevity as they are unchanged, but ensuring they are kept in the final file)
-// NOTE: In a real apply, I would include the full file content. 
-// Assuming I need to return the FULL content of Lobby.tsx with my changes inserted.
-
+// ... (MissionCard stays same)
 const MissionCard: React.FC<{ mission: Mission, onClaim: (id: string) => void }> = ({ mission, onClaim }) => {
     const { t } = useTranslation();
     const progress = Math.min(100, (mission.currentValue / mission.targetValue) * 100);
@@ -45,8 +41,8 @@ const MissionCard: React.FC<{ mission: Mission, onClaim: (id: string) => void }>
     );
 };
 
+// ... (AuthModal same)
 const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void; nickname: string; onUpdateNickname: (name: string) => void; }> = ({ isOpen, onClose, nickname, onUpdateNickname }) => {
-    // ... (Content same as provided) ...
     const [mode, setMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -79,23 +75,356 @@ const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void; nickname: stri
     );
 };
 
-// ... (ProfileModal, LeaderboardOverlay, TeamSelectionModal also remain same) ...
-const ProfileModal: React.FC<{ isOpen: boolean; onClose: () => void; currentName: string; onSaveName: (newName: string) => Promise<boolean>; account: AccountData; }> = ({ isOpen, onClose, currentName, onSaveName, account }) => {
-    // ... same as context ...
+// ... (ProfileModal same)
+const ProfileModal: React.FC<{ 
+    isOpen: boolean; 
+    onClose: () => void; 
+    currentName: string;
+    onSaveName: (newName: string) => Promise<boolean>;
+    account: AccountData;
+}> = ({ isOpen, onClose, currentName, onSaveName, account }) => {
     const [name, setName] = useState(currentName);
     const [status, setStatus] = useState<'IDLE' | 'LOADING' | 'SUCCESS' | 'ERROR'>('IDLE');
     const [msg, setMsg] = useState('');
     const [timeLeft, setTimeLeft] = useState(0);
-    useEffect(() => { if (isOpen) { const check = Persistence.canChangeNickname(); setTimeLeft(check.timeLeft); setName(currentName); } }, [isOpen, currentName]);
-    const formatTimeLeft = (ms: number) => { const d = Math.floor(ms / (24*60*60*1000)); const h = Math.floor((ms % (24*60*60*1000)) / (60*60*1000)); return `${d}d ${h}h`; };
-    const handleSave = async () => { if (!name.trim()) return; setStatus('LOADING'); soundManager.playUiClick(); try { const result = await Persistence.updateNickname(name.trim()); if (result.success) { setStatus('SUCCESS'); setMsg('IDENTITY RE-ENCODED'); if (onSaveName) await onSaveName(name.trim()); setTimeout(() => { onClose(); setStatus('IDLE'); }, 1500); } else { setStatus('ERROR'); setMsg(result.message); soundManager.playDamage(); } } catch (e) { setStatus('ERROR'); setMsg('UPLINK FAILURE'); } };
+
+    useEffect(() => {
+        if (isOpen) {
+            const check = Persistence.canChangeNickname();
+            setTimeLeft(check.timeLeft);
+            setName(currentName);
+        }
+    }, [isOpen, currentName]);
+
+    const formatTimeLeft = (ms: number) => {
+        const d = Math.floor(ms / (24*60*60*1000));
+        const h = Math.floor((ms % (24*60*60*1000)) / (60*60*1000));
+        return `${d}d ${h}h`;
+    };
+
+    const handleSave = async () => {
+        if (!name.trim()) return;
+        setStatus('LOADING');
+        soundManager.playUiClick();
+        
+        try {
+            const result = await Persistence.updateNickname(name.trim());
+            if (result.success) {
+                setStatus('SUCCESS');
+                setMsg('IDENTITY RE-ENCODED');
+                if (onSaveName) await onSaveName(name.trim());
+                setTimeout(() => { onClose(); setStatus('IDLE'); }, 1500);
+            } else {
+                setStatus('ERROR');
+                setMsg(result.message);
+                soundManager.playDamage();
+            }
+        } catch (e) {
+            setStatus('ERROR');
+            setMsg('UPLINK FAILURE');
+        }
+    };
+
     if (!isOpen) return null;
+
+    const rankInfo = getRankInfo(account.rank);
     const isVerified = account.rank > 50 || account.role === 'ADMIN'; 
-    return ( <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4 animate-in fade-in duration-200"> <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass-panel w-full max-w-lg rounded-xl border border-white/10 shadow-[0_0_100px_rgba(0,0,0,0.8)] relative overflow-hidden flex flex-col md:flex-row"> <div className="w-full md:w-1/3 bg-black/40 border-b md:border-b-0 md:border-r border-white/10 p-6 flex flex-col items-center justify-center relative"> <div className="absolute inset-0 bg-grid-pattern opacity-20 pointer-events-none"></div> <div className="relative z-10 w-24 h-24 mb-4"> <div className="absolute inset-0 rounded-full border-2 border-cyan-500/50 animate-pulse"></div> <div className="w-full h-full rounded-full bg-black flex items-center justify-center overflow-hidden border border-white/20"> {account.equippedFlag !== 'NONE' ? ( <img src={`https://flagcdn.com/w80/${account.equippedFlag.toLowerCase()}.png`} className="w-full h-full object-cover opacity-80" /> ) : <User className="w-10 h-10 text-gray-500" />} </div> {isVerified && ( <div className={`absolute -bottom-2 -right-2 ${account.role === 'ADMIN' ? 'bg-red-500' : 'bg-blue-500'} text-white p-1 rounded-full border border-black shadow-lg`} title="Verified Operative"> {account.role === 'ADMIN' ? <Crown className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />} </div> )} </div> <div className="text-xl font-black text-white tracking-widest font-sans">{name.toUpperCase()}</div> <div className={`text-[10px] font-mono mb-4 ${account.role === 'ADMIN' ? 'text-red-500 font-bold animate-pulse' : 'text-cyan-500'}`}> {account.role === 'ADMIN' ? 'SYSTEM ADMINISTRATOR' : (isVerified ? 'VERIFIED OPERATIVE' : 'ROOKIE PILOT')} </div> <div className="w-full h-px bg-white/10 mb-4"></div> <div className="grid grid-cols-2 gap-2 w-full text-center"> <div> <div className="text-[9px] text-gray-500">RANK</div> <div className="text-lg font-bold text-white">{account.rank}</div> </div> <div> <div className="text-[9px] text-gray-500">SCORE</div> <div className="text-lg font-bold text-yellow-400">{(account.highScore/1000).toFixed(1)}k</div> </div> </div> </div> <div className="flex-1 p-6 md:p-8 flex flex-col relative"> <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"><X className="w-5 h-5" /></button> <h2 className="text-lg font-bold text-white tracking-widest font-sans mb-1 flex items-center gap-2"> <Edit3 className="w-4 h-4 text-cyan-400" /> IDENTITY MATRIX </h2> <p className="text-[10px] text-gray-500 font-mono mb-6">Modifying your neural signature requires a system reboot and a strict cooldown period to maintain global integrity.</p> <div className="space-y-6 flex-1"> <div> <label className="text-[10px] font-bold font-mono text-cyan-400 mb-2 block flex justify-between"> <span>CALLSIGN</span> {timeLeft > 0 && <span className="text-red-400 flex items-center gap-1"><Lock className="w-3 h-3" /> LOCKED</span>} </label> <div className="relative"> <input type="text" value={name} onChange={(e) => setName(e.target.value.toUpperCase())} maxLength={15} disabled={timeLeft > 0 || status === 'LOADING'} className={` w-full bg-black/60 border rounded p-4 text-xl font-mono text-center tracking-[0.2em] outline-none transition-all ${timeLeft > 0 ? 'border-red-500/30 text-gray-600 cursor-not-allowed' : 'border-white/20 text-white focus:border-cyan-500 focus:bg-cyan-900/10'} `} /> </div> {timeLeft > 0 ? ( <div className="mt-2 p-2 bg-red-900/10 border border-red-500/20 rounded text-[10px] font-mono text-red-400 text-center flex items-center justify-center gap-2"> <Timer className="w-3 h-3" /> NEXT CHANGE AVAILABLE IN: <span className="font-bold text-white">{formatTimeLeft(timeLeft)}</span> </div> ) : ( <div className="mt-2 text-[10px] font-mono text-green-400 text-center flex items-center justify-center gap-1 opacity-50"> <CheckCircle className="w-3 h-3" /> CHANGE AVAILABLE. WILL LOCK FOR 3 DAYS. </div> )} </div> <div className="mt-auto"> <AnimatePresence> {msg && ( <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`mb-4 text-xs font-bold font-mono text-center py-2 rounded border ${status === 'SUCCESS' ? 'text-green-400 bg-green-900/20 border-green-500/30' : 'text-red-400 bg-red-900/20 border-red-500/30'}`}> {msg} </motion.div> )} </AnimatePresence> <button onClick={handleSave} disabled={timeLeft > 0 || status === 'LOADING' || name === currentName} className={` w-full py-4 rounded font-bold font-sans tracking-widest text-sm flex items-center justify-center gap-2 transition-all relative overflow-hidden group ${timeLeft > 0 || name === currentName ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-cyan-500 text-black hover:bg-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.4)]'} `}> {status === 'LOADING' ? <Loader2 className="w-4 h-4 animate-spin" /> : 'CONFIRM IDENTITY REWRITE'} </button> </div> </div> </div> </motion.div> </div> ); };
 
-const LeaderboardOverlay: React.FC<{ isOpen: boolean; onClose: () => void; entries: LeaderboardEntry[]; }> = ({ isOpen, onClose, entries }) => { if (!isOpen) return null; const top3 = entries.slice(0, 3); const rest = entries.slice(3); return ( <div className="absolute inset-0 z-[90] bg-black/95 backdrop-blur-xl flex flex-col animate-in fade-in zoom-in duration-300"> <div className="p-6 border-b border-white/10 flex items-center justify-between bg-cyan-950/10"> <div className="flex items-center gap-4"> <Globe className="w-8 h-8 text-cyan-400" /> <div> <h2 className="text-2xl font-black text-white font-sans tracking-[0.2em]">GLOBAL RANKINGS</h2> <div className="text-xs font-mono text-cyan-500/60">LIVE NEURAL FEED • SEASON 1</div> </div> </div> <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full text-white transition-colors"><X className="w-6 h-6" /></button> </div> <div className="flex-1 overflow-hidden flex flex-col md:flex-row"> <div className="w-full md:w-5/12 bg-gradient-to-b from-[#0a0a15] to-black p-8 flex flex-col items-center justify-center relative border-b md:border-b-0 md:border-r border-white/10"> <div className="absolute inset-0 bg-grid-pattern opacity-10 pointer-events-none"></div> <div className="flex items-end justify-center gap-4 mb-12 w-full h-64"> {top3[1] && ( <div className="flex flex-col items-center relative z-10 scale-90 opacity-80 hover:opacity-100 hover:scale-95 transition-all duration-300"> <div className="text-gray-400 font-black text-4xl mb-2 font-mono">2</div> <div className="relative w-32 h-32 mb-4"> <TankPreview weapon={EVOLUTION_TREE.find(w => w.name === top3[1].mainClass) || EVOLUTION_TREE[0]} size={120} color={SHOP_ITEMS.find(s=>s.id===top3[1].skinId)?.color || COLORS.player} /> </div> <div className="bg-gray-800/80 px-4 py-2 rounded text-center border border-gray-500"> <div className="text-white font-bold font-sans text-sm">{top3[1].name}</div> <div className="text-[10px] text-gray-400 font-mono">{(top3[1].score/1000).toFixed(0)}k</div> </div> </div> )} {top3[0] && ( <div className="flex flex-col items-center relative z-20 scale-110 -mb-8 hover:scale-115 transition-all duration-300"> <Crown className="w-10 h-10 text-yellow-400 mb-2 animate-bounce" /> <div className="relative w-40 h-40 mb-4"> <div className="absolute inset-0 bg-yellow-500/20 blur-3xl rounded-full animate-pulse"></div> <TankPreview weapon={EVOLUTION_TREE.find(w => w.name === top3[0].mainClass) || EVOLUTION_TREE[0]} size={150} color={SHOP_ITEMS.find(s=>s.id===top3[0].skinId)?.color || COLORS.player} trailId="EMBER" /> </div> <div className="bg-yellow-900/80 px-6 py-3 rounded text-center border border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.4)]"> <div className="text-yellow-100 font-black font-sans text-lg">{top3[0].name}</div> <div className="text-xs text-yellow-400 font-mono font-bold">{(top3[0].score/1000000).toFixed(2)}M</div> </div> </div> )} {top3[2] && ( <div className="flex flex-col items-center relative z-10 scale-90 opacity-80 hover:opacity-100 hover:scale-95 transition-all duration-300"> <div className="text-orange-700 font-black text-4xl mb-2 font-mono">3</div> <div className="relative w-32 h-32 mb-4"> <TankPreview weapon={EVOLUTION_TREE.find(w => w.name === top3[2].mainClass) || EVOLUTION_TREE[0]} size={120} color={SHOP_ITEMS.find(s=>s.id===top3[2].skinId)?.color || COLORS.player} /> </div> <div className="bg-orange-900/40 px-4 py-2 rounded text-center border border-orange-800"> <div className="text-white font-bold font-sans text-sm">{top3[2].name}</div> <div className="text-[10px] text-gray-400 font-mono">{(top3[2].score/1000).toFixed(0)}k</div> </div> </div> )} </div> </div> <div className="flex-1 bg-black/60 overflow-y-auto custom-scrollbar p-4 md:p-8"> <div className="grid grid-cols-1 gap-2"> {rest.map((entry, idx) => ( <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.03 }} key={entry.id} className={`flex items-center justify-between p-3 rounded border transition-all hover:scale-[1.01] ${entry.isSelf ? 'bg-cyan-900/20 border-cyan-500/50' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}> <div className="flex items-center gap-4"> <div className="w-8 text-center font-mono font-bold text-gray-500">#{entry.rank}</div> <div className="w-8 h-6 bg-black rounded overflow-hidden relative border border-white/20"> {entry.flagId !== 'NONE' ? ( <img src={`https://flagcdn.com/w40/${entry.flagId?.toLowerCase()}.png`} className="w-full h-full object-cover" /> ) : <div className="w-full h-full bg-gray-800"></div>} </div> <div> <div className={`font-bold font-sans text-sm flex items-center gap-2 ${entry.isSelf ? 'text-cyan-400' : 'text-gray-200'}`}>{entry.name}{entry.verified && <ShieldCheck className="w-3 h-3 text-blue-400" />}</div> <div className="text-[10px] text-gray-500 font-mono">LVL {entry.level} • {entry.mainClass || 'Unknown'}</div> </div> </div> <div className="text-right"> <div className="font-mono font-bold text-white text-sm">{entry.score.toLocaleString()}</div> <div className="text-[9px] text-gray-600">XP</div> </div> </motion.div> ))} </div> </div> </div> </div> ); };
+    return (
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4 animate-in fade-in duration-200">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass-panel w-full max-w-lg rounded-xl border border-white/10 shadow-[0_0_100px_rgba(0,0,0,0.8)] relative overflow-hidden flex flex-col md:flex-row">
+                
+                {/* Visual Side */}
+                <div className="w-full md:w-1/3 bg-black/40 border-b md:border-b-0 md:border-r border-white/10 p-6 flex flex-col items-center justify-center relative">
+                    <div className="absolute inset-0 bg-grid-pattern opacity-20 pointer-events-none"></div>
+                    <div className="relative z-10 w-24 h-24 mb-4">
+                        <div className="absolute inset-0 rounded-full border-2 border-cyan-500/50 animate-pulse"></div>
+                        <div className="w-full h-full rounded-full bg-black flex items-center justify-center overflow-hidden border border-white/20">
+                             {/* Show Flag if equipped */}
+                             {account.equippedFlag !== 'NONE' ? (
+                                 <img src={`https://flagcdn.com/w80/${account.equippedFlag.toLowerCase()}.png`} className="w-full h-full object-cover opacity-80" />
+                             ) : <User className="w-10 h-10 text-gray-500" />}
+                        </div>
+                        {isVerified && (
+                            <div className={`absolute -bottom-2 -right-2 ${account.role === 'ADMIN' ? 'bg-red-500' : 'bg-blue-500'} text-white p-1 rounded-full border border-black shadow-lg`} title="Verified Operative">
+                                {account.role === 'ADMIN' ? <Crown className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+                            </div>
+                        )}
+                    </div>
+                    <div className="text-xl font-black text-white tracking-widest font-sans">{name.toUpperCase()}</div>
+                    <div className={`text-[10px] font-mono mb-4 ${account.role === 'ADMIN' ? 'text-red-500 font-bold animate-pulse' : 'text-cyan-500'}`}>
+                        {account.role === 'ADMIN' ? 'SYSTEM ADMINISTRATOR' : (isVerified ? 'VERIFIED OPERATIVE' : 'ROOKIE PILOT')}
+                    </div>
+                    
+                    <div className="w-full h-px bg-white/10 mb-4"></div>
+                    <div className="grid grid-cols-2 gap-2 w-full text-center">
+                        <div>
+                            <div className="text-[9px] text-gray-500">RANK</div>
+                            <div className="text-lg font-bold text-white">{account.rank}</div>
+                        </div>
+                        <div>
+                            <div className="text-[9px] text-gray-500">SCORE</div>
+                            <div className="text-lg font-bold text-yellow-400">{(account.highScore/1000).toFixed(1)}k</div>
+                        </div>
+                    </div>
+                </div>
 
-const TeamSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onSelect: (team: number) => void }> = ({ isOpen, onClose, onSelect }) => { if (!isOpen) return null; const blueCount = Math.floor(Math.random() * 20) + 10; const redCount = Math.floor(Math.random() * 20) + 10; const recommendBlue = redCount > blueCount + 2; const recommendRed = blueCount > redCount + 2; return ( <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4 animate-in fade-in zoom-in duration-300"> <div className="w-full max-w-4xl h-[70vh] flex flex-col relative rounded-xl border border-white/10 overflow-hidden shadow-2xl"> <button onClick={onClose} className="absolute top-4 right-4 z-50 text-gray-500 hover:text-white bg-black/50 p-2 rounded-full"><X /></button> <div className="absolute top-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center"> <h2 className="text-3xl font-black font-sans text-white tracking-[0.3em] uppercase drop-shadow-lg">CHOOSE FACTION</h2> <div className="text-xs font-mono text-gray-400 bg-black/60 px-3 py-1 rounded border border-white/10 mt-2"> BALANCED MATCHMAKING ACTIVE </div> </div> <div className="flex-1 flex flex-col md:flex-row h-full"> <div className="flex-1 relative group cursor-pointer overflow-hidden border-b md:border-b-0 md:border-r border-white/10" onClick={() => onSelect(1)}> <div className="absolute inset-0 bg-blue-900/20 group-hover:bg-blue-600/20 transition-colors duration-500"></div> <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-8"> <div className="relative mb-6 transform group-hover:scale-110 transition-transform duration-300"> <div className="absolute inset-0 bg-cyan-500/30 blur-3xl rounded-full animate-pulse"></div> <Shield className="w-24 h-24 text-cyan-400 drop-shadow-[0_0_15px_rgba(34,211,238,0.8)]" /> </div> <h3 className="text-4xl font-black text-cyan-400 font-sans tracking-tighter mb-2">BLUE TEAM</h3> <div className="text-sm font-mono text-cyan-200 mb-6">DEFENDERS OF THE CORE</div> <div className="flex items-center gap-2 mb-4"> <Users className="w-4 h-4 text-cyan-500" /> <span className="font-bold font-mono text-lg text-white">{blueCount} OPERATIVES</span> </div> {recommendBlue && ( <div className="px-3 py-1 bg-green-500/20 border border-green-500 text-green-400 text-xs font-bold rounded animate-pulse"> RECOMMENDED (XP BOOST) </div> )} <div className="mt-auto opacity-0 group-hover:opacity-100 transition-opacity translate-y-4 group-hover:translate-y-0 duration-300"> <div className="px-8 py-3 bg-cyan-500 text-black font-bold font-sans tracking-widest rounded clip-path-polygon hover:bg-cyan-400"> JOIN BLUE </div> </div> </div> </div> <div className="flex-1 relative group cursor-pointer overflow-hidden" onClick={() => onSelect(2)}> <div className="absolute inset-0 bg-red-900/20 group-hover:bg-red-600/20 transition-colors duration-500"></div> <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-8"> <div className="relative mb-6 transform group-hover:scale-110 transition-transform duration-300"> <div className="absolute inset-0 bg-red-500/30 blur-3xl rounded-full animate-pulse"></div> <Swords className="w-24 h-24 text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]" /> </div> <h3 className="text-4xl font-black text-red-500 font-sans tracking-tighter mb-2">RED TEAM</h3> <div className="text-sm font-mono text-red-200 mb-6">AGGRESSORS OF THE VOID</div> <div className="flex items-center gap-2 mb-4"> <Users className="w-4 h-4 text-red-500" /> <span className="font-bold font-mono text-lg text-white">{redCount} OPERATIVES</span> </div> {recommendRed && ( <div className="px-3 py-1 bg-green-500/20 border border-green-500 text-green-400 text-xs font-bold rounded animate-pulse"> RECOMMENDED (XP BOOST) </div> )} <div className="mt-auto opacity-0 group-hover:opacity-100 transition-opacity translate-y-4 group-hover:translate-y-0 duration-300"> <div className="px-8 py-3 bg-red-500 text-black font-bold font-sans tracking-widest rounded clip-path-polygon hover:bg-red-400"> JOIN RED </div> </div> </div> </div> </div> </div> </div> ); };
+                {/* Edit Side */}
+                <div className="flex-1 p-6 md:p-8 flex flex-col relative">
+                    <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+                    
+                    <h2 className="text-lg font-bold text-white tracking-widest font-sans mb-1 flex items-center gap-2">
+                        <Edit3 className="w-4 h-4 text-cyan-400" /> IDENTITY MATRIX
+                    </h2>
+                    <p className="text-[10px] text-gray-500 font-mono mb-6">Modifying your neural signature requires a system reboot and a strict cooldown period to maintain global integrity.</p>
+
+                    <div className="space-y-6 flex-1">
+                        <div>
+                            <label className="text-[10px] font-bold font-mono text-cyan-400 mb-2 block flex justify-between">
+                                <span>CALLSIGN</span>
+                                {timeLeft > 0 && <span className="text-red-400 flex items-center gap-1"><Lock className="w-3 h-3" /> LOCKED</span>}
+                            </label>
+                            <div className="relative">
+                                <input 
+                                    type="text" 
+                                    value={name} 
+                                    onChange={(e) => setName(e.target.value.toUpperCase())}
+                                    maxLength={15}
+                                    disabled={timeLeft > 0 || status === 'LOADING'}
+                                    className={`
+                                        w-full bg-black/60 border rounded p-4 text-xl font-mono text-center tracking-[0.2em] outline-none transition-all
+                                        ${timeLeft > 0 ? 'border-red-500/30 text-gray-600 cursor-not-allowed' : 'border-white/20 text-white focus:border-cyan-500 focus:bg-cyan-900/10'}
+                                    `}
+                                />
+                            </div>
+                            {timeLeft > 0 ? (
+                                <div className="mt-2 p-2 bg-red-900/10 border border-red-500/20 rounded text-[10px] font-mono text-red-400 text-center flex items-center justify-center gap-2">
+                                    <Timer className="w-3 h-3" /> 
+                                    NEXT CHANGE AVAILABLE IN: <span className="font-bold text-white">{formatTimeLeft(timeLeft)}</span>
+                                </div>
+                            ) : (
+                                <div className="mt-2 text-[10px] font-mono text-green-400 text-center flex items-center justify-center gap-1 opacity-50">
+                                    <CheckCircle className="w-3 h-3" /> CHANGE AVAILABLE. WILL LOCK FOR 3 DAYS.
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="mt-auto">
+                            <AnimatePresence>
+                                {msg && (
+                                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className={`mb-4 text-xs font-bold font-mono text-center py-2 rounded border ${status === 'SUCCESS' ? 'text-green-400 bg-green-900/20 border-green-500/30' : 'text-red-400 bg-red-900/20 border-red-500/30'}`}>
+                                        {msg}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+
+                            <button 
+                                onClick={handleSave}
+                                disabled={timeLeft > 0 || status === 'LOADING' || name === currentName}
+                                className={`
+                                    w-full py-4 rounded font-bold font-sans tracking-widest text-sm flex items-center justify-center gap-2 transition-all relative overflow-hidden group
+                                    ${timeLeft > 0 || name === currentName ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-cyan-500 text-black hover:bg-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.4)]'}
+                                `}
+                            >
+                                {status === 'LOADING' ? <Loader2 className="w-4 h-4 animate-spin" /> : 'CONFIRM IDENTITY REWRITE'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </motion.div>
+        </div>
+    );
+};
+
+// ... (LeaderboardOverlay same)
+const LeaderboardOverlay: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    entries: LeaderboardEntry[];
+}> = ({ isOpen, onClose, entries }) => {
+    if (!isOpen) return null;
+
+    const top3 = entries.slice(0, 3);
+    const rest = entries.slice(3);
+
+    return (
+        <div className="absolute inset-0 z-[90] bg-black/95 backdrop-blur-xl flex flex-col animate-in fade-in zoom-in duration-300">
+            <div className="p-6 border-b border-white/10 flex items-center justify-between bg-cyan-950/10">
+                <div className="flex items-center gap-4">
+                    <Globe className="w-8 h-8 text-cyan-400" />
+                    <div>
+                        <h2 className="text-2xl font-black text-white font-sans tracking-[0.2em]">GLOBAL RANKINGS</h2>
+                        <div className="text-xs font-mono text-cyan-500/60">LIVE NEURAL FEED • SEASON 1</div>
+                    </div>
+                </div>
+                <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full text-white transition-colors"><X className="w-6 h-6" /></button>
+            </div>
+
+            <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+                {/* Visual Side Same */}
+                <div className="w-full md:w-5/12 bg-gradient-to-b from-[#0a0a15] to-black p-8 flex flex-col items-center justify-center relative border-b md:border-b-0 md:border-r border-white/10">
+                    <div className="absolute inset-0 bg-grid-pattern opacity-10 pointer-events-none"></div>
+                    <div className="flex items-end justify-center gap-4 mb-12 w-full h-64">
+                        {/* 2nd */}
+                        {top3[1] && (
+                            <div className="flex flex-col items-center relative z-10 scale-90 opacity-80 hover:opacity-100 hover:scale-95 transition-all duration-300">
+                                <div className="text-gray-400 font-black text-4xl mb-2 font-mono">2</div>
+                                <div className="relative w-32 h-32 mb-4">
+                                    <TankPreview weapon={EVOLUTION_TREE.find(w => w.name === top3[1].mainClass) || EVOLUTION_TREE[0]} size={120} color={SHOP_ITEMS.find(s=>s.id===top3[1].skinId)?.color || COLORS.player} />
+                                </div>
+                                <div className="bg-gray-800/80 px-4 py-2 rounded text-center border border-gray-500">
+                                    <div className="text-white font-bold font-sans text-sm">{top3[1].name}</div>
+                                    <div className="text-[10px] text-gray-400 font-mono">{(top3[1].score/1000).toFixed(0)}k</div>
+                                </div>
+                            </div>
+                        )}
+                        {/* 1st */}
+                        {top3[0] && (
+                            <div className="flex flex-col items-center relative z-20 scale-110 -mb-8 hover:scale-115 transition-all duration-300">
+                                <Crown className="w-10 h-10 text-yellow-400 mb-2 animate-bounce" />
+                                <div className="relative w-40 h-40 mb-4">
+                                    <div className="absolute inset-0 bg-yellow-500/20 blur-3xl rounded-full animate-pulse"></div>
+                                    <TankPreview weapon={EVOLUTION_TREE.find(w => w.name === top3[0].mainClass) || EVOLUTION_TREE[0]} size={150} color={SHOP_ITEMS.find(s=>s.id===top3[0].skinId)?.color || COLORS.player} trailId="EMBER" />
+                                </div>
+                                <div className="bg-yellow-900/80 px-6 py-3 rounded text-center border border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.4)]">
+                                    <div className="text-yellow-100 font-black font-sans text-lg">{top3[0].name}</div>
+                                    <div className="text-xs text-yellow-400 font-mono font-bold">{(top3[0].score/1000000).toFixed(2)}M</div>
+                                </div>
+                            </div>
+                        )}
+                        {/* 3rd */}
+                        {top3[2] && (
+                            <div className="flex flex-col items-center relative z-10 scale-90 opacity-80 hover:opacity-100 hover:scale-95 transition-all duration-300">
+                                <div className="text-orange-700 font-black text-4xl mb-2 font-mono">3</div>
+                                <div className="relative w-32 h-32 mb-4">
+                                    <TankPreview weapon={EVOLUTION_TREE.find(w => w.name === top3[2].mainClass) || EVOLUTION_TREE[0]} size={120} color={SHOP_ITEMS.find(s=>s.id===top3[2].skinId)?.color || COLORS.player} />
+                                </div>
+                                <div className="bg-orange-900/40 px-4 py-2 rounded text-center border border-orange-800">
+                                    <div className="text-white font-bold font-sans text-sm">{top3[2].name}</div>
+                                    <div className="text-[10px] text-gray-400 font-mono">{(top3[2].score/1000).toFixed(0)}k</div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* THE LIST */}
+                <div className="flex-1 bg-black/60 overflow-y-auto custom-scrollbar p-4 md:p-8">
+                    <div className="grid grid-cols-1 gap-2">
+                        {rest.map((entry, idx) => (
+                            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.03 }} key={entry.id} className={`flex items-center justify-between p-3 rounded border transition-all hover:scale-[1.01] ${entry.isSelf ? 'bg-cyan-900/20 border-cyan-500/50' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-8 text-center font-mono font-bold text-gray-500">#{entry.rank}</div>
+                                    <div className="w-8 h-6 bg-black rounded overflow-hidden relative border border-white/20">
+                                        {entry.flagId !== 'NONE' ? ( <img src={`https://flagcdn.com/w40/${entry.flagId?.toLowerCase()}.png`} className="w-full h-full object-cover" /> ) : <div className="w-full h-full bg-gray-800"></div>}
+                                    </div>
+                                    <div>
+                                        <div className={`font-bold font-sans text-sm flex items-center gap-2 ${entry.isSelf ? 'text-cyan-400' : 'text-gray-200'}`}>{entry.name}{entry.verified && <ShieldCheck className="w-3 h-3 text-blue-400" />}</div>
+                                        <div className="text-[10px] text-gray-500 font-mono">LVL {entry.level} • {entry.mainClass || 'Unknown'}</div>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="font-mono font-bold text-white text-sm">{entry.score.toLocaleString()}</div>
+                                    <div className="text-[9px] text-gray-600">XP</div>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// NEW: Team Selection Modal
+const TeamSelectionModal: React.FC<{ isOpen: boolean; onClose: () => void; onSelect: (team: number) => void }> = ({ isOpen, onClose, onSelect }) => {
+    if (!isOpen) return null;
+
+    // Simulate balanced counts (In real app, this comes from server)
+    const blueCount = Math.floor(Math.random() * 20) + 10;
+    const redCount = Math.floor(Math.random() * 20) + 10;
+    const total = blueCount + redCount;
+    const balanced = Math.abs(blueCount - redCount) <= 2;
+    const recommendBlue = redCount > blueCount + 2;
+    const recommendRed = blueCount > redCount + 2;
+
+    return (
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4 animate-in fade-in zoom-in duration-300">
+            <div className="w-full max-w-4xl h-[70vh] flex flex-col relative rounded-xl border border-white/10 overflow-hidden shadow-2xl">
+                <button onClick={onClose} className="absolute top-4 right-4 z-50 text-gray-500 hover:text-white bg-black/50 p-2 rounded-full"><X /></button>
+                
+                <div className="absolute top-8 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center">
+                    <h2 className="text-3xl font-black font-sans text-white tracking-[0.3em] uppercase drop-shadow-lg">CHOOSE FACTION</h2>
+                    <div className="text-xs font-mono text-gray-400 bg-black/60 px-3 py-1 rounded border border-white/10 mt-2">
+                        BALANCED MATCHMAKING ACTIVE
+                    </div>
+                </div>
+
+                <div className="flex-1 flex flex-col md:flex-row h-full">
+                    {/* BLUE TEAM */}
+                    <div className="flex-1 relative group cursor-pointer overflow-hidden border-b md:border-b-0 md:border-r border-white/10" onClick={() => onSelect(1)}>
+                        <div className="absolute inset-0 bg-blue-900/20 group-hover:bg-blue-600/20 transition-colors duration-500"></div>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-8">
+                            <div className="relative mb-6 transform group-hover:scale-110 transition-transform duration-300">
+                                <div className="absolute inset-0 bg-cyan-500/30 blur-3xl rounded-full animate-pulse"></div>
+                                <Shield className="w-24 h-24 text-cyan-400 drop-shadow-[0_0_15px_rgba(34,211,238,0.8)]" />
+                            </div>
+                            <h3 className="text-4xl font-black text-cyan-400 font-sans tracking-tighter mb-2">BLUE TEAM</h3>
+                            <div className="text-sm font-mono text-cyan-200 mb-6">DEFENDERS OF THE CORE</div>
+                            
+                            <div className="flex items-center gap-2 mb-4">
+                                <Users className="w-4 h-4 text-cyan-500" />
+                                <span className="font-bold font-mono text-lg text-white">{blueCount} OPERATIVES</span>
+                            </div>
+
+                            {recommendBlue && (
+                                <div className="px-3 py-1 bg-green-500/20 border border-green-500 text-green-400 text-xs font-bold rounded animate-pulse">
+                                    RECOMMENDED (XP BOOST)
+                                </div>
+                            )}
+                            
+                            <div className="mt-auto opacity-0 group-hover:opacity-100 transition-opacity translate-y-4 group-hover:translate-y-0 duration-300">
+                                <div className="px-8 py-3 bg-cyan-500 text-black font-bold font-sans tracking-widest rounded clip-path-polygon hover:bg-cyan-400">
+                                    JOIN BLUE
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* RED TEAM */}
+                    <div className="flex-1 relative group cursor-pointer overflow-hidden" onClick={() => onSelect(2)}>
+                        <div className="absolute inset-0 bg-red-900/20 group-hover:bg-red-600/20 transition-colors duration-500"></div>
+                        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-8">
+                            <div className="relative mb-6 transform group-hover:scale-110 transition-transform duration-300">
+                                <div className="absolute inset-0 bg-red-500/30 blur-3xl rounded-full animate-pulse"></div>
+                                <Swords className="w-24 h-24 text-red-500 drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]" />
+                            </div>
+                            <h3 className="text-4xl font-black text-red-500 font-sans tracking-tighter mb-2">RED TEAM</h3>
+                            <div className="text-sm font-mono text-red-200 mb-6">AGGRESSORS OF THE VOID</div>
+                            
+                            <div className="flex items-center gap-2 mb-4">
+                                <Users className="w-4 h-4 text-red-500" />
+                                <span className="font-bold font-mono text-lg text-white">{redCount} OPERATIVES</span>
+                            </div>
+
+                            {recommendRed && (
+                                <div className="px-3 py-1 bg-green-500/20 border border-green-500 text-green-400 text-xs font-bold rounded animate-pulse">
+                                    RECOMMENDED (XP BOOST)
+                                </div>
+                            )}
+
+                            <div className="mt-auto opacity-0 group-hover:opacity-100 transition-opacity translate-y-4 group-hover:translate-y-0 duration-300">
+                                <div className="px-8 py-3 bg-red-500 text-black font-bold font-sans tracking-widest rounded clip-path-polygon hover:bg-red-400">
+                                    JOIN RED
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 interface LobbyProps {
   onStart: (profile: PlayerProfile) => void;
@@ -111,10 +440,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onStart, onChangeView }) => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showGlobalLeaderboard, setShowGlobalLeaderboard] = useState(false);
-  const [showTeamSelect, setShowTeamSelect] = useState(false);
-  
-  // NEW: Custom Room State
-  const [customRoomId, setCustomRoomId] = useState<string | null>(null);
+  const [showTeamSelect, setShowTeamSelect] = useState(false); // New
   
   const [activeLeaderboardTab, setActiveLeaderboardTab] = useState<'LOCAL' | 'GLOBAL'>('LOCAL');
   const [globalLeaderboard, setGlobalLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -125,6 +451,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onStart, onChangeView }) => {
   
   const constraintsRef = useRef(null);
 
+  // --- INIT LOGIC ---
   useEffect(() => {
       // 1. Auth & Local State
       Persistence.initAuth((u) => {
@@ -146,51 +473,17 @@ export const Lobby: React.FC<LobbyProps> = ({ onStart, onChangeView }) => {
       // 4. Global Leaderboard
       Persistence.fetchGlobalLeaderboard().then(data => { setGlobalLeaderboard(data); });
 
-      // 5. REALTIME ONLINE COUNT
+      // 5. REALTIME ONLINE COUNT (Supabase Presence)
       const unsubscribe = Persistence.initPresence((count) => {
           setOnlineCount(count);
       });
-      
-      // 6. CHECK URL FOR INVITES
-      const params = new URLSearchParams(window.location.search);
-      const roomParam = params.get('room');
-      if (roomParam) {
-          setCustomRoomId(roomParam);
-      }
 
       return () => {
           if (unsubscribe) unsubscribe();
       };
   }, []);
   
-  const getRoomId = (mode: string) => { 
-      // PRIORITY: If URL has ?room=XYZ, use that!
-      if (customRoomId) return customRoomId;
-      
-      const modeKey = mode.toLowerCase().replace(/ /g, '-'); 
-      return `cb-evo-global-${modeKey}`; 
-  };
-  
-  const handleCreatePrivate = () => {
-      soundManager.playUiClick();
-      const newRoomId = `private-${Math.random().toString(36).substr(2, 6)}`;
-      
-      // Update URL without reload
-      const url = new URL(window.location.href);
-      url.searchParams.set('room', newRoomId);
-      window.history.pushState({}, '', url);
-      
-      setCustomRoomId(newRoomId);
-  };
-  
-  const clearPrivate = () => {
-      soundManager.playUiClick();
-      const url = new URL(window.location.href);
-      url.searchParams.delete('room');
-      window.history.pushState({}, '', url);
-      setCustomRoomId(null);
-  }
-
+  const getRoomId = (mode: string) => { const modeKey = mode.toLowerCase().replace(/ /g, '-'); return `cb-evo-global-${modeKey}`; };
   const handleClaimMission = (id: string) => { const updatedAccount = Persistence.claimMission(id); if (updatedAccount) { setAccount(updatedAccount); soundManager.playKillConfirm(); } };
   const handleAuthClick = () => { soundManager.playUiClick(); setShowAuthModal(true); };
   const handleProfileClick = () => { soundManager.playUiClick(); setShowProfileModal(true); };
@@ -216,6 +509,8 @@ export const Lobby: React.FC<LobbyProps> = ({ onStart, onChangeView }) => {
         return;
     }
 
+    // Logic Magic: If we have a saved run, we carry over its Level/Score regardless of mode
+    // unless explicitly resetting (which we don't support in simple UI yet, effectively "New Game+")
     const runToCarry = account.savedRun;
 
     onStart({ 
@@ -260,6 +555,7 @@ export const Lobby: React.FC<LobbyProps> = ({ onStart, onChangeView }) => {
       <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} nickname={nickname} onUpdateNickname={updateNickname} />
       <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} currentName={nickname} onSaveName={updateNickname} account={account} />
       <LeaderboardOverlay isOpen={showGlobalLeaderboard} onClose={() => setShowGlobalLeaderboard(false)} entries={globalLeaderboard} />
+      
       <TeamSelectionModal isOpen={showTeamSelect} onClose={() => setShowTeamSelect(false)} onSelect={handleTeamSelected} />
 
       <AnimatePresence>
@@ -296,23 +592,11 @@ export const Lobby: React.FC<LobbyProps> = ({ onStart, onChangeView }) => {
                 )}
                 </div>
                 
-                {/* Custom Room UI */}
-                {customRoomId ? (
-                    <div className="bg-purple-900/20 border border-purple-500/50 p-3 rounded flex flex-col gap-2 animate-in fade-in">
-                        <div className="flex justify-between items-center">
-                            <div className="flex items-center gap-2 text-purple-400 font-bold font-mono text-xs">
-                                <Link className="w-3 h-3" /> PRIVATE PARTY ACTIVE
-                            </div>
-                            <button onClick={clearPrivate} className="text-gray-500 hover:text-white"><X className="w-3 h-3" /></button>
-                        </div>
-                        <div className="bg-black/40 p-2 rounded text-[10px] text-gray-400 font-mono break-all text-center">
-                            Room: <span className="text-white font-bold">{customRoomId}</span>
-                        </div>
+                {account.role === 'ADMIN' && (
+                    <div className="bg-red-500/20 border border-red-500/50 p-2 rounded flex items-center justify-center gap-2 animate-pulse">
+                        <Crown className="w-4 h-4 text-red-500" />
+                        <span className="text-xs font-black text-red-400 font-sans tracking-widest">SYSTEM ADMINISTRATOR</span>
                     </div>
-                ) : (
-                    <button onClick={handleCreatePrivate} className="text-[10px] font-mono text-purple-400 hover:text-purple-300 underline text-right">
-                        + CREATE PRIVATE PARTY
-                    </button>
                 )}
 
                 <div className="relative group">
@@ -374,10 +658,10 @@ export const Lobby: React.FC<LobbyProps> = ({ onStart, onChangeView }) => {
               </div>
 
               <div className="glass-panel p-4 md:p-6 lg:p-8 rounded-sm flex flex-col flex-1 border border-white/10 min-h-[350px]">
-                  <div className="flex justify-between items-end mb-4 border-b border-white/10 pb-2 shrink-0"><h2 className="text-lg md:text-xl font-bold text-white font-sans tracking-widest flex items-center gap-2"><Activity className="w-5 h-5 text-cyan-400" />{customRoomId ? 'PRIVATE PARTY' : t('lobby_select_zone')}</h2><div className="text-[10px] md:text-xs font-mono text-gray-500 hidden sm:block">SELECT A ZONE TO DEPLOY</div></div>
+                  <div className="flex justify-between items-end mb-4 border-b border-white/10 pb-2 shrink-0"><h2 className="text-lg md:text-xl font-bold text-white font-sans tracking-widest flex items-center gap-2"><Activity className="w-5 h-5 text-cyan-400" />{t('lobby_select_zone')}</h2><div className="text-[10px] md:text-xs font-mono text-gray-500 hidden sm:block">SELECT A ZONE TO DEPLOY</div></div>
                   <motion.div variants={containerVariants} initial="hidden" animate="show" className="grid grid-cols-1 gap-2 overflow-y-auto custom-scrollbar pr-2 flex-1">
-                      {savedRun && (<motion.button variants={itemVariants} onClick={() => handleModeSelect(savedRun.gameMode, true)} className="group relative flex items-center justify-between p-3 md:p-4 bg-yellow-500/10 border border-yellow-500/30 hover:bg-yellow-500/20 hover:border-yellow-500 transition-all text-left rounded shadow-[0_0_15px_rgba(234,179,8,0.1)] mb-2" onMouseEnter={() => soundManager.playUiHover()} whileHover={{ scale: 1.01, x: 5 }} whileTap={{ scale: 0.99 }}><div className="flex items-center gap-4"><div className="w-12 h-12 bg-yellow-500/20 rounded flex items-center justify-center border border-yellow-500/50 relative overflow-hidden"><PlayCircle className="w-6 h-6 text-yellow-400 relative z-10" /><div className="absolute inset-0 bg-yellow-500/10 animate-pulse"></div></div><div><div className="text-lg font-black text-yellow-400 font-sans tracking-wide uppercase flex items-center gap-2">RESUME: {savedWeaponName}<span className="text-[10px] bg-yellow-500 text-black px-1.5 rounded font-bold animate-pulse">SAVED</span></div><div className="text-[10px] font-mono text-gray-400 flex items-center gap-2"><span>LVL {savedRun.level}</span><span className="w-1 h-1 bg-gray-600 rounded-full"></span><span>SCORE: {savedRun.score.toLocaleString()}</span></div></div></div><div className="text-yellow-400 font-bold font-mono text-xs flex items-center gap-1">CONTINUE <PlayCircle className="w-3 h-3" /></div></motion.button>)}
-                      {MODES.map((mode) => { const isSandbox = mode === 'Sandbox'; return (<motion.button variants={itemVariants} key={mode} onClick={() => handleModeSelect(mode)} className={`group relative flex items-center justify-between p-3 md:p-4 bg-white/5 border border-white/5 hover:bg-cyan-500/10 hover:border-cyan-500/50 transition-all text-left rounded`} onMouseEnter={() => soundManager.playUiHover()} whileHover={{ scale: 1.01, x: 5 }} whileTap={{ scale: 0.99 }}><div className="flex items-center gap-3 md:gap-4"><div className={`w-10 h-10 md:w-12 md:h-12 bg-black/50 rounded flex items-center justify-center border group-hover:border-cyan-500/50 transition-colors shrink-0 border-white/10`}>{isSandbox ? <Code className="w-5 h-5 text-gray-500" /> : <span className={`font-mono font-bold text-base md:text-lg text-gray-500 group-hover:text-cyan-400`}>{mode.substring(0,2).toUpperCase()}</span>}</div><div><div className="text-base md:text-lg font-bold text-gray-200 group-hover:text-white font-sans uppercase flex items-center gap-2">{mode}{savedRun && !isSandbox && (<span className="text-[9px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/50 px-1.5 rounded flex items-center gap-1"><Database className="w-2 h-2" /> STATS CARRIED OVER</span>)}{isSandbox ? (<span className="text-[9px] bg-gray-700 text-gray-300 px-1.5 rounded font-mono">UNRANKED</span>) : (<span className="text-[9px] bg-cyan-900/50 text-cyan-400 border border-cyan-500/30 px-1.5 rounded font-mono flex items-center gap-1"><Database className="w-2 h-2" /> PERSISTENT</span>)}</div><div className="flex items-center gap-2 text-[10px] font-mono text-gray-500"><span className="text-gray-600">● REGION: {customRoomId ? 'PRIVATE' : 'GLOBAL'}</span></div></div></div><div className="flex items-center gap-2 md:gap-6"><div className={`px-4 py-2 md:px-6 md:py-2 font-bold font-mono text-[10px] md:text-xs rounded border transition-all bg-cyan-500/20 text-cyan-400 border-cyan-500/50 group-hover:bg-cyan-500 group-hover:text-black`}>{t('lobby_deploy')}</div></div></motion.button>)})}
+                      {savedRun && (<motion.button variants={itemVariants} onClick={() => handleModeSelect(savedRun.gameMode, true)} className="group relative flex items-center justify-between p-3 md:p-4 bg-yellow-900/10 border border-yellow-500/30 hover:bg-yellow-500/20 hover:border-yellow-500 transition-all text-left rounded shadow-[0_0_15px_rgba(234,179,8,0.1)] mb-2" onMouseEnter={() => soundManager.playUiHover()} whileHover={{ scale: 1.01, x: 5 }} whileTap={{ scale: 0.99 }}><div className="flex items-center gap-4"><div className="w-12 h-12 bg-yellow-500/20 rounded flex items-center justify-center border border-yellow-500/50 relative overflow-hidden"><PlayCircle className="w-6 h-6 text-yellow-400 relative z-10" /><div className="absolute inset-0 bg-yellow-500/10 animate-pulse"></div></div><div><div className="text-lg font-black text-yellow-400 font-sans tracking-wide uppercase flex items-center gap-2">RESUME: {savedWeaponName}<span className="text-[10px] bg-yellow-500 text-black px-1.5 rounded font-bold animate-pulse">SAVED</span></div><div className="text-[10px] font-mono text-gray-400 flex items-center gap-2"><span>LVL {savedRun.level}</span><span className="w-1 h-1 bg-gray-600 rounded-full"></span><span>SCORE: {savedRun.score.toLocaleString()}</span></div></div></div><div className="text-yellow-400 font-bold font-mono text-xs flex items-center gap-1">CONTINUE <PlayCircle className="w-3 h-3" /></div></motion.button>)}
+                      {MODES.map((mode) => { const isSandbox = mode === 'Sandbox'; return (<motion.button variants={itemVariants} key={mode} onClick={() => handleModeSelect(mode)} className={`group relative flex items-center justify-between p-3 md:p-4 bg-white/5 border border-white/5 hover:bg-cyan-500/10 hover:border-cyan-500/50 transition-all text-left rounded`} onMouseEnter={() => soundManager.playUiHover()} whileHover={{ scale: 1.01, x: 5 }} whileTap={{ scale: 0.99 }}><div className="flex items-center gap-3 md:gap-4"><div className={`w-10 h-10 md:w-12 md:h-12 bg-black/50 rounded flex items-center justify-center border group-hover:border-cyan-500/50 transition-colors shrink-0 border-white/10`}>{isSandbox ? <Code className="w-5 h-5 text-gray-500" /> : <span className={`font-mono font-bold text-base md:text-lg text-gray-500 group-hover:text-cyan-400`}>{mode.substring(0,2).toUpperCase()}</span>}</div><div><div className="text-base md:text-lg font-bold text-gray-200 group-hover:text-white font-sans uppercase flex items-center gap-2">{mode}{savedRun && !isSandbox && (<span className="text-[9px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/50 px-1.5 rounded flex items-center gap-1"><Database className="w-2 h-2" /> STATS CARRIED OVER</span>)}{isSandbox ? (<span className="text-[9px] bg-gray-700 text-gray-300 px-1.5 rounded font-mono">UNRANKED</span>) : (<span className="text-[9px] bg-cyan-900/50 text-cyan-400 border border-cyan-500/30 px-1.5 rounded font-mono flex items-center gap-1"><Database className="w-2 h-2" /> PERSISTENT</span>)}</div><div className="flex items-center gap-2 text-[10px] font-mono text-gray-500"><span className="text-gray-600">● REGION: GLOBAL</span></div></div></div><div className="flex items-center gap-2 md:gap-6"><div className={`px-4 py-2 md:px-6 md:py-2 font-bold font-mono text-[10px] md:text-xs rounded border transition-all bg-cyan-500/20 text-cyan-400 border-cyan-500/50 group-hover:bg-cyan-500 group-hover:text-black`}>{t('lobby_deploy')}</div></div></motion.button>)})}
                   </motion.div>
               </div>
 

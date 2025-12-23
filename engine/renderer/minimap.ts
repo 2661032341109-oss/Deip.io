@@ -25,7 +25,6 @@ export const drawMinimap = (gameCtx: GameContext) => {
     ctx.fillRect(0, 0, width, height);
 
     gameCtx.entities.current.forEach(e => {
-        if (!e.position) return; // SAFEGUARD
         if (e.type !== EntityType.WALL && e.type !== EntityType.ZONE) return;
         const mx = cx + (e.position.x * scale);
         const my = cy + (e.position.y * scale);
@@ -45,7 +44,6 @@ export const drawMinimap = (gameCtx: GameContext) => {
     });
 
     gameCtx.entities.current.forEach(e => {
-        if (!e.position) return; // SAFEGUARD
         if (e.type === EntityType.WALL || e.type === EntityType.ZONE || e.type === EntityType.PARTICLE || e.type.includes('BULLET') || e.type.includes('DRONE') || e.type.includes('MISSILE') || e.type.includes('TRAP')) return;
         const mx = cx + (e.position.x * scale);
         const my = cy + (e.position.y * scale);
