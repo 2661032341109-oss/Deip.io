@@ -150,7 +150,8 @@ export class NetworkManager {
                     resolve(this.room.roomId);
 
                 } catch (e: any) {
-                    Logger.error(`Connection Failed: ${e.message}`);
+                    const errorMsg = e.message || JSON.stringify(e);
+                    Logger.error(`Connection Failed: ${errorMsg}`);
                     
                     // IMPORTANT: Do NOT automatically fallback to offline for multiplayer modes.
                     // This creates a "fake" experience where the user thinks they are online but are alone.

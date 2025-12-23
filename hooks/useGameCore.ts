@@ -65,51 +65,16 @@ export const useGameCore = (
                     setEngineState('DISCONNECTED');
                     setTimeout(() => onGameOver(), 3000); 
                 };
-    
-                // Init Network with Retry Logic
-                const initNetwork = async (retries = 3): Promise<string> => {
-                    try {
-                         // We wait longer (5s) for connection to establish before failing
-                         const connectionPromise = context.network.current.init(networkRole, playerProfile.roomId);
-                         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Connection Timeout")), 5000));
-                         return await Promise.race([connectionPromise, timeoutPromise]) as string;
-                    } catch (e) {
-                        if (retries > 0) {
-                            Logger.warn(`Connection failed, retrying... (${retries} left)`);
-                            await new Promise(r => setTimeout(r, 1000));
-                            return initNetwork(retries - 1);
-                        }
-                        throw e;
-                    }
-                };
 
-                let id: string;
-                if (networkRole === 'OFFLINE') {
-                     id = await context.network.current.init('OFFLINE');
-                } else {
-                    try {
-                        id = await initNetwork();
-                    } catch (e) {
-                        Logger.error("Failed to connect to Global Server.");
-                        // Force back to lobby on failure rather than fake offline
-                        setEngineState('ERROR');
-                        setTimeout(() => onGameOver(), 4000);
-                        return;
-                    }
-                }
-                
-                Logger.net(`Network Ready. Session: ${id}`);
-                setRoomId(id);
-    
-                // Initialize Memory Pools
-                context.deadEntities.current = new Array(200).fill(null).map(() => ({} as Entity));
-                context.deadParticles.current = new Array(400).fill(null).map(() => ({} as Particle));
-    
-                // Game Setup
-                // If Offline, we create map locally.
-                // If Online, map data comes from snapshot, BUT we might want to pre-load static map data if available.
-                // For now, we only generate full map locally if offline.
-                if (context.network.current.role === 'OFFLINE') {
+                const setupOfflineMode = async () => {
+                    Logger.info("Starting Offline Simulation...");
+                    const id = await context.network.current.init('OFFLINE');
+                    setRoomId('offline');
+                    
+                    // Clear existing if any
+                    context.entities.current = [];
+                    context.particles.current = [];
+
                     createMap(context, playerProfile.gameMode);
                     const startLevel = playerProfile.savedRun ? playerProfile.savedRun.level : 1;
                     spawnPlayer(context, activeWeaponId, playerProfile.gameMode, playerProfile.nickname, startLevel, playerProfile.teamId);
@@ -129,23 +94,53 @@ export const useGameCore = (
                     // Initial Spawns for Offline
                     const initSpawnCount = playerProfile.gameMode === 'Mega' ? 120 : 60;
                     for (let i = 0; i < initSpawnCount; i++) spawnShape(context);
+
+                    if (context.chatMessages.current.length === 0) {
+                        context.chatMessages.current.push({ id: 'sys-init', sender: 'SYSTEM', text: 'Offline Mode Active.', timestamp: Date.now(), system: true });
+                    }
+                    setEngineState('READY');
+                };
+    
+                // Init Network with Retry Logic
+                const initNetwork = async (retries = 3): Promise<string> => {
+                    try {
+                         // We wait longer (5s) for connection to establish before failing
+                         const connectionPromise = context.network.current.init(networkRole, playerProfile.roomId);
+                         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Connection Timeout")), 5000));
+                         return await Promise.race([connectionPromise, timeoutPromise]) as string;
+                    } catch (e) {
+                        if (retries > 0) {
+                            Logger.warn(`Connection failed, retrying... (${retries} left)`);
+                            await new Promise(r => setTimeout(r, 1000));
+                            return initNetwork(retries - 1);
+                        }
+                        throw e;
+                    }
+                };
+
+                let id: string = '';
+                if (networkRole === 'OFFLINE') {
+                     await setupOfflineMode();
                 } else {
-                    // ONLINE CLIENT SETUP
-                    // We don't spawn the player ourselves, the server does. 
-                    // We just need to identify which entity is ours once the snapshot arrives.
-                    // However, we can init the map boundaries visually if we know the mode.
-                    createMap(context, playerProfile.gameMode);
+                    try {
+                        id = await initNetwork();
+                        Logger.net(`Network Ready. Session: ${id}`);
+                        setRoomId(id);
+                        if (context.chatMessages.current.length === 0) {
+                            context.chatMessages.current.push({ id: 'sys-init', sender: 'SYSTEM', text: 'Connected to Global Server.', timestamp: Date.now(), system: true });
+                        }
+                        setEngineState('READY');
+                    } catch (e) {
+                        Logger.warn("Server connection failed. Activating Neural Fallback Protocol (Offline Mode).");
+                        // Fallback to offline mode seamlessly
+                        context.network.current.destroy(); // Clean up failed connection attempts
+                        await setupOfflineMode();
+                    }
                 }
                 
                 sessionStats.current = { kills: 0, startTime: Date.now() / 1000, bossKills: 0 };
-
-                if (context.chatMessages.current.length === 0) {
-                    const statusText = context.network.current.role === 'OFFLINE' ? 'Offline Mode Active.' : 'Connected to Global Server.';
-                    context.chatMessages.current.push({ id: 'sys-init', sender: 'SYSTEM', text: statusText, timestamp: Date.now(), system: true });
-                }
-                
                 lastTime.current = performance.now();
-                setEngineState('READY');
+                
             } catch (e: any) {
                 console.error("Critical Engine Failure", e);
                 setEngineState('ERROR');

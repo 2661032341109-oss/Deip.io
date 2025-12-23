@@ -52,9 +52,10 @@ export class SoundManager {
 
     // Call this on first user interaction to unlock audio context
     initialize() {
-        if (!this.isInitialized) {
-            this.resume();
-            this.isInitialized = true;
+        if (!this.isInitialized || this.ctx.state === 'suspended') {
+            this.ctx.resume().then(() => {
+                this.isInitialized = true;
+            }).catch(e => console.warn("Audio resume failed", e));
         }
     }
 
@@ -141,7 +142,7 @@ export class SoundManager {
 
     // --- UI SOUNDS (Synthesized) ---
     playUiHover() {
-        if (this.isMuted) return;
+        if (this.isMuted || this.ctx.state !== 'running') return; // Prevent playing if context is locked
         const now = this.ctx.currentTime;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -161,7 +162,12 @@ export class SoundManager {
     }
 
     playUiClick() {
+        this.initialize(); // Click is an interaction, try to init
         if (this.isMuted) return;
+        
+        // Short delay to ensure context is ready if it was just resumed
+        if (this.ctx.state !== 'running') return;
+
         const now = this.ctx.currentTime;
         
         // Click transient
@@ -184,7 +190,7 @@ export class SoundManager {
 
     // --- KILL CONFIRMATION (Dopamine Hit) ---
     playKillConfirm() {
-        if (this.isMuted) return;
+        if (this.isMuted || this.ctx.state !== 'running') return;
         const now = this.ctx.currentTime;
         const busGain = this.ctx.createGain();
         
@@ -223,7 +229,7 @@ export class SoundManager {
 
     // --- HEAVY EXPLOSION (For Bosses/Deaths) ---
     playExplosion() {
-        if (this.isMuted) return;
+        if (this.isMuted || this.ctx.state !== 'running') return;
         const now = this.ctx.currentTime;
         const busGain = this.ctx.createGain();
         
@@ -262,7 +268,7 @@ export class SoundManager {
 
     // --- SHOOTING SOUNDS ---
     playShoot(type: string = 'BULLET', weaponId?: string) {
-        if (this.isMuted) return;
+        if (this.isMuted || this.ctx.state !== 'running') return;
         const now = this.ctx.currentTime;
 
         // --- COMMON SETUP ---
@@ -491,7 +497,7 @@ export class SoundManager {
     }
 
     playHit(isMetal: boolean = false) {
-        if (this.isMuted) return;
+        if (this.isMuted || this.ctx.state !== 'running') return;
         const now = this.ctx.currentTime;
         
         const busGain = this.ctx.createGain();
@@ -536,7 +542,7 @@ export class SoundManager {
     }
 
     playDamage() {
-        if (this.isMuted) return;
+        if (this.isMuted || this.ctx.state !== 'running') return;
         const now = this.ctx.currentTime;
         
         const busGain = this.ctx.createGain();
