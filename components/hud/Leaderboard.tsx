@@ -4,6 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { LeaderboardEntry, KillFeedEntry, GameSettings } from '../../types';
 import { Map as MapIcon, Target } from 'lucide-react';
 
+// Fix for strict TypeScript environments where motion types might conflict
+const MotionDiv = motion.div as any;
+const MotionLi = motion.li as any;
+
 interface LeaderboardProps {
     entries: LeaderboardEntry[];
     killFeed: KillFeedEntry[];
@@ -16,7 +20,7 @@ interface LeaderboardProps {
 export const Leaderboard: React.FC<LeaderboardProps> = ({ entries, killFeed, minimapRef, isMobile, settings, t }) => {
     return (
         <div className="flex flex-col items-end gap-2 pointer-events-auto max-w-[40%]">
-            <motion.div 
+            <MotionDiv 
                 initial={{ scale: 0 }} animate={{ scale: 1 }}
                 className="glass-panel p-1 rounded border border-cyan-500/20 bg-black/80 relative shadow-lg overflow-hidden transition-all duration-300"
                 style={{
@@ -26,14 +30,14 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ entries, killFeed, min
             >
                 <canvas ref={minimapRef} className="w-full h-full object-contain block" width={140} height={140} />
                 <MapIcon className="w-3 h-3 text-white/20 absolute bottom-1 right-1" />
-            </motion.div>
+            </MotionDiv>
 
             {/* KILL FEED */}
             {killFeed && killFeed.length > 0 && (
                 <div className="flex flex-col items-end gap-1 mt-2">
                     <AnimatePresence>
                     {killFeed.slice(-3).map((kill) => (
-                        <motion.div
+                        <MotionDiv
                             key={kill.id}
                             initial={{ x: 20, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
@@ -43,13 +47,13 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ entries, killFeed, min
                             <span className="text-cyan-400 font-bold">{kill.killer}</span>
                             <Target className="w-3 h-3 text-gray-500" />
                             <span className="text-red-400">{kill.victim}</span>
-                        </motion.div>
+                        </MotionDiv>
                     ))}
                     </AnimatePresence>
                 </div>
             )}
 
-            <motion.div 
+            <MotionDiv 
                 initial={{ x: 50, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.2 }}
                 className="w-32 md:w-56 glass-panel p-2 md:p-3 bg-black/60 rounded border border-white/5 shadow-lg mt-1"
             >
@@ -57,7 +61,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ entries, killFeed, min
                 <ol className="space-y-1 font-mono text-[9px] md:text-xs">
                 {entries && entries.length > 0 ? (
                     entries.slice(0, isMobile ? 3 : 5).map((entry, index) => (
-                        <motion.li 
+                        <MotionLi 
                             layout
                             key={entry.id} 
                             className={`flex justify-between items-center px-1 rounded ${entry.isSelf ? 'text-cyan-400 font-bold bg-white/10' : 'text-white/70'}`}
@@ -70,7 +74,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ entries, killFeed, min
                                 </span>
                             </div>
                             <span>{entry.score >= 1000 ? (entry.score/1000).toFixed(1) + 'k' : entry.score}</span>
-                        </motion.li>
+                        </MotionLi>
                     ))
                 ) : (
                     <li className="flex justify-between items-center text-cyan-400 font-bold px-1">
@@ -79,7 +83,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ entries, killFeed, min
                     </li>
                 )}
                 </ol>
-            </motion.div>
+            </MotionDiv>
         </div>
     );
 };

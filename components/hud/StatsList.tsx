@@ -5,6 +5,9 @@ import { PlayerStatsUpgrade } from '../../types';
 import { Activity, Shield, Skull, Zap, ChevronLast, Crosshair, RefreshCw, Move } from 'lucide-react';
 import { soundManager } from '../../engine/SoundManager';
 
+// Fix for strict TypeScript environments where motion types might conflict
+const MotionDiv = motion.div as any;
+
 const STAT_ICONS: Record<string, React.FC<any>> = {
   '1': Activity,     
   '2': Shield,       
@@ -32,12 +35,12 @@ export const StatsList: React.FC<StatsListProps> = React.memo(({ stats, isMobile
             const statName = t(`stat_${u.id}`, { defaultValue: u.label });
             
             return (
-            <motion.div 
+            <MotionDiv 
                 layout
                 key={u.id} 
-                onMouseDown={(e) => e.stopPropagation()}
-                onTouchStart={(e) => e.stopPropagation()}
-                onClick={(e) => {
+                onMouseDown={(e: any) => e.stopPropagation()}
+                onTouchStart={(e: any) => e.stopPropagation()}
+                onClick={(e: any) => {
                     e.stopPropagation();
                     if (!isMaxed) {
                         soundManager.playUiClick();
@@ -52,7 +55,7 @@ export const StatsList: React.FC<StatsListProps> = React.memo(({ stats, isMobile
                 whileHover={{ scale: isMaxed ? 1 : 1.02 }}
                 whileTap={{ scale: isMaxed ? 1 : 0.98 }}
             >
-                <motion.div 
+                <MotionDiv 
                     className="absolute inset-0 bg-cyan-500/20 origin-left" 
                     initial={{ width: 0 }}
                     animate={{ width: `${(u.level / u.maxLevel) * 100}%` }}
@@ -68,7 +71,7 @@ export const StatsList: React.FC<StatsListProps> = React.memo(({ stats, isMobile
                     </div>
                     <span className="text-[9px] font-mono text-gray-500">[{u.level}/{u.maxLevel}]</span>
                 </div>
-            </motion.div>
+            </MotionDiv>
             );
         })}
     </div>

@@ -2,9 +2,24 @@
 import { Entity, Vector2 } from '../../types';
 
 const CELL_SIZE = 150; 
-const grid: Map<string, number[]> = new Map(); 
+// Use a Map with number keys (Bitwise Hash) instead of strings to avoid GC pressure
+const grid: Map<number, number[]> = new Map(); 
 
 export const clearGrid = () => grid.clear();
+
+// Cantor Pairing function or Bitwise Shift could work. 
+// Since coordinates can be negative, we offset them.
+// Assuming map size < 65535 units in each direction for bitwise safety.
+const HASH_OFFSET = 32768; 
+
+const getHash = (x: number, y: number): number => {
+    // Shift coordinates to positive range
+    const bx = (x + HASH_OFFSET) | 0;
+    const by = (y + HASH_OFFSET) | 0;
+    // Pack two 16-bit integers into one 32-bit integer
+    // Limit: Map coordinates must fit within +/- ~3000 cells (approx 450,000 units)
+    return (bx & 0xFFFF) | ((by & 0xFFFF) << 16);
+};
 
 export const addToGrid = (e: Entity, index: number) => {
     let halfW = e.radius;
@@ -22,9 +37,13 @@ export const addToGrid = (e: Entity, index: number) => {
 
     for (let x = minX; x <= maxX; x++) {
         for (let y = minY; y <= maxY; y++) {
-            const key = `${x},${y}`;
-            if (!grid.has(key)) grid.set(key, []);
-            grid.get(key)!.push(index);
+            const hash = getHash(x, y);
+            let cell = grid.get(hash);
+            if (!cell) {
+                cell = [];
+                grid.set(hash, cell);
+            }
+            cell.push(index);
         }
     }
 };
@@ -41,12 +60,20 @@ export const getNearbyIndices = (e: Entity, prevPos?: Vector2): number[] => {
     const minY = Math.floor((y1 - rad) / CELL_SIZE);
     const maxY = Math.floor((y2 + rad) / CELL_SIZE);
     
+    // Using a Set is good for uniqueness, but for extreme performance, 
+    // iterating and checking simple duplication might be faster in some JS engines.
+    // However, for this scale, Set is clean and effective enough.
     const indices = new Set<number>();
+    
     for (let x = minX; x <= maxX; x++) {
         for (let y = minY; y <= maxY; y++) {
-            const cell = grid.get(`${x},${y}`);
+            const hash = getHash(x, y);
+            const cell = grid.get(hash);
             if (cell) {
-                for (let i = 0; i < cell.length; i++) indices.add(cell[i]);
+                const len = cell.length;
+                for (let i = 0; i < len; i++) {
+                    indices.add(cell[i]);
+                }
             }
         }
     }

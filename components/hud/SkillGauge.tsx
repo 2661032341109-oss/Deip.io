@@ -3,6 +3,10 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Zap } from 'lucide-react';
 
+// Fix for strict TypeScript environments where motion types might conflict
+const MotionDiv = motion.div as any;
+const MotionCircle = motion.circle as any;
+
 interface SkillGaugeProps {
     skill: {
         name: string;
@@ -30,7 +34,7 @@ export const SkillGauge: React.FC<SkillGaugeProps> = ({ skill, isMobile }) => {
 
     return (
         <div className={`relative flex flex-col items-center group`}>
-            <motion.div 
+            <MotionDiv 
                 className={`relative flex items-center justify-center`}
                 animate={{ scale: isReady ? 1.05 : 1 }}
             >
@@ -47,7 +51,7 @@ export const SkillGauge: React.FC<SkillGaugeProps> = ({ skill, isMobile }) => {
                         cx={radius}
                         cy={radius}
                     />
-                    <motion.circle
+                    <MotionCircle
                         stroke={isActive ? '#ffd700' : (isReady ? '#00f3ff' : '#ef4444')}
                         strokeWidth={stroke}
                         strokeDasharray={circumference + ' ' + circumference}
@@ -72,7 +76,7 @@ export const SkillGauge: React.FC<SkillGaugeProps> = ({ skill, isMobile }) => {
                 {isReady && !isActive && (
                     <div className="absolute inset-0 rounded-full animate-ping bg-cyan-500/30 pointer-events-none"></div>
                 )}
-            </motion.div>
+            </MotionDiv>
 
             <div className="mt-1 flex flex-col items-center">
                 <div className={`

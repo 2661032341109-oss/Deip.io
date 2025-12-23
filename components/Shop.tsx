@@ -11,6 +11,9 @@ import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ImageCache } from '../engine/ImageCache';
 
+// Fix for strict TypeScript environments where motion types might conflict
+const MotionDiv = motion.div as any;
+
 interface ShopProps {
   onBack: () => void;
   onPurchase: () => void; // Trigger update in parent
@@ -228,7 +231,7 @@ export const Shop: React.FC<ShopProps> = ({ onBack, onPurchase }) => {
                     style={{ backgroundColor: selectedItem.type === 'SKIN' ? selectedItem.color : '#ffffff' }}
                 ></div>
                 
-                <motion.div 
+                <MotionDiv 
                     key={selectedItem.id}
                     initial={{ scale: 0.8, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
@@ -243,7 +246,7 @@ export const Shop: React.FC<ShopProps> = ({ onBack, onPurchase }) => {
                         flagId={previewFlag} // Pass flag ID to preview
                         className="drop-shadow-2xl" 
                     />
-                </motion.div>
+                </MotionDiv>
 
                 <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-8 text-white/20 font-mono text-[10px] tracking-[0.3em]">
                     <span>PREVIEW // {activeTab}</span>

@@ -9,7 +9,7 @@ export interface GameContext {
   minimapRef: RefObject<HTMLCanvasElement | null>;
   entities: MutableRefObject<Entity[]>;
   particles: MutableRefObject<Particle[]>;
-  shockwaves: MutableRefObject<Shockwave[]>; // New: Dedicated shockwave buffer
+  shockwaves: MutableRefObject<Shockwave[]>; 
   deadEntities: MutableRefObject<Entity[]>;
   deadParticles: MutableRefObject<Particle[]>;
   lightningBeams: MutableRefObject<{x1:number, y1:number, x2:number, y2:number, life:number}[]>;

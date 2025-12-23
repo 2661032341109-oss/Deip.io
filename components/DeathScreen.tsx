@@ -5,6 +5,9 @@ import { Eye, RefreshCw, LogOut, Skull, ChevronLeft, ChevronRight, Zap } from 'l
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 
+// Fix for strict TypeScript environments where motion types might conflict
+const MotionDiv = motion.div as any;
+
 interface DeathScreenProps {
   killerName: string;
   score: number;
@@ -38,7 +41,7 @@ export const DeathScreen: React.FC<DeathScreenProps> = ({
   if (isSpectating) {
     return (
       <div className="absolute inset-x-0 bottom-8 z-50 flex flex-col items-center pointer-events-none">
-        <motion.div 
+        <MotionDiv 
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             className="pointer-events-auto flex items-center gap-4 bg-black/60 backdrop-blur-md p-2 rounded-full border border-white/10 shadow-2xl"
@@ -59,7 +62,7 @@ export const DeathScreen: React.FC<DeathScreenProps> = ({
           <button onClick={onSpectateNext} className="p-2 hover:bg-white/10 rounded-full text-white transition-colors">
             <ChevronRight className="w-6 h-6" />
           </button>
-        </motion.div>
+        </MotionDiv>
 
         <div className="mt-4 pointer-events-auto">
              <Button variant="danger" onClick={onRespawn} className="px-6 py-2 text-sm shadow-lg">
@@ -72,7 +75,7 @@ export const DeathScreen: React.FC<DeathScreenProps> = ({
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <motion.div 
+      <MotionDiv 
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ type: 'spring', damping: 15 }}
@@ -143,7 +146,7 @@ export const DeathScreen: React.FC<DeathScreenProps> = ({
            </div>
         </div>
 
-      </motion.div>
+      </MotionDiv>
     </div>
   );
 };

@@ -1,3 +1,4 @@
+
 import React, { useRef, useEffect, forwardRef, useImperativeHandle, useState } from 'react';
 import { Entity, Particle, PlayerProfile, PlayerStatsUpgrade, SandboxOptions, LeaderboardEntry, GameSettings, ChatMessage, KillFeedEntry, WorldEventType, Shockwave } from '../types';
 import { UPGRADE_TEMPLATE, EVOLUTION_TREE, COLORS } from '../constants';
@@ -8,7 +9,7 @@ import { soundManager } from '../engine/SoundManager';
 import { NetworkManager } from '../engine/NetworkManager';
 import { Persistence, SHOP_ITEMS } from '../engine/Persistence'; 
 import { Logger } from '../engine/Logger'; 
-import { Loader2, Hexagon } from 'lucide-react';
+import { Loader2, Hexagon, WifiOff, AlertTriangle } from 'lucide-react';
 import { DeathScreen } from './DeathScreen';
 import { useGameInput } from '../hooks/useGameInput'; 
 import { useGameSignals } from '../hooks/useGameSignals'; 
@@ -58,7 +59,7 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
     settingsRef.current = settings;
   }, [settings]);
 
-  // --- CORE CONTEXT INITIALIZATION ---
+  // --- CORE CONTEXT ---
   const context: GameContext = {
       canvasRef,
       minimapRef,
@@ -94,7 +95,6 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
       chatMessages: useRef<ChatMessage[]>([])
   };
 
-  // --- HOOKS: Logic Injection ---
   const { engineState, roomId, deathInfo, setDeathInfo, sessionStats, extractionRef, currentFps } = useGameCore(context, playerProfile, settings, activeWeaponId, onGameOver, onLevelUp);
   useGameInput(context); 
   useGameSignals(context, sandboxOptions, engineState, deathInfo); 
@@ -168,7 +168,7 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
 
   useImperativeHandle(ref, () => ({ upgradeStat, sendChat, handleSafeExit }));
 
-  // Restore Save Data (One-time check on Ready)
+  // Restore Save Data
   useEffect(() => {
      if (engineState !== 'READY') return;
      const player = context.entities.current.find(e => e.id === 'player'); 
@@ -215,7 +215,7 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
      }
   }, [activeWeaponId, engineState]);
 
-  // UI Loop (Decoupled from Physics Loop)
+  // UI Loop
   useEffect(() => {
       const uiInterval = setInterval(() => {
         if (engineState !== 'READY') return;
@@ -282,38 +282,13 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
       return () => clearInterval(uiInterval);
   }, [engineState, roomId]);
 
-  // Spectator Cam
-  useEffect(() => {
-    if (deathInfo) {
-        let target: Entity | undefined;
-        if (spectateTargetRef.current) target = context.entities.current.find(e => e.id === spectateTargetRef.current);
-        if (!target) {
-            target = context.entities.current.find(e => e.name === deathInfo.killer && e.type !== 'WALL');
-            if (!target) {
-                const players = context.entities.current.filter(e => e.type === 'PLAYER' || e.type === 'ENEMY');
-                if (players.length > 0) {
-                     if (spectateIndexRef.current >= players.length) spectateIndexRef.current = 0;
-                     target = players[spectateIndexRef.current];
-                }
-            }
-            if (target) spectateTargetRef.current = target.id;
-        }
-        if (target) {
-            context.camera.current.x = target.position.x + (Math.random()-0.5)*context.camera.current.shake;
-            context.camera.current.y = target.position.y + (Math.random()-0.5)*context.camera.current.shake;
-            context.camera.current.zoom = 0.8; context.camera.current.shake *= 0.9;
-        }
-    }
-  }, [deathInfo]); // Runs on render/state updates mostly
-
-  // Rendering Loop (Independent of Logic Loop for high refresh)
+  // Render Loop
   useEffect(() => {
       let rafId = 0;
       const render = () => {
           if (engineState === 'READY') {
               drawScene(context);
               if (extractionRef.current.active) {
-                  // Draw extraction circle overlay directly here for max smoothness
                   const ctx = canvasRef.current?.getContext('2d');
                   if (ctx) {
                       const player = context.entities.current.find(e => e.id === 'player');
@@ -339,8 +314,8 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
       return () => cancelAnimationFrame(rafId);
   }, [engineState]);
 
+  // Handlers
   const handleRespawn = () => {
-     // Respawn Logic Logic
      const previousLevel = deathInfo?.level || 1;
      const startLevel = Math.max(1, Math.floor(previousLevel / 2));
 
@@ -370,7 +345,6 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
         player.trailId = playerProfile.trailId;
         player.flagId = playerProfile.flagId;
      }
-     
      Logger.game(`Player Respawned at Level ${startLevel}`);
   };
 
@@ -409,22 +383,7 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
                 spectateTargetName={currentSpectateName}
             />
         )}
-        {deathInfo && !isSpectating && deathInfo.currencyEarned !== undefined && (
-            <div className="absolute top-24 left-1/2 -translate-x-1/2 z-[60] animate-in fade-in zoom-in duration-500 pointer-events-none">
-                <div className="bg-yellow-500/20 border border-yellow-500/50 p-4 rounded-lg flex flex-col items-center gap-1 backdrop-blur-md shadow-[0_0_50px_rgba(234,179,8,0.5)]">
-                    <div className="text-yellow-400 font-bold font-mono text-sm tracking-widest">
-                        {deathInfo.currencyEarned > 0 ? 'MISSION REWARD' : 'SIMULATION COMPLETE'}
-                    </div>
-                    {deathInfo.currencyEarned > 0 ? (
-                        <div className="text-white font-black text-4xl text-shadow-lg flex items-center gap-2">
-                            +{deathInfo.currencyEarned} <span className="text-yellow-400 text-lg">DUST</span>
-                        </div>
-                    ) : (
-                        <div className="text-gray-400 font-bold text-lg">NO DATA RECORDED</div>
-                    )}
-                </div>
-            </div>
-        )}
+        
         {engineState === 'INITIALIZING' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center z-50 pointer-events-none">
                 <div className="relative">
@@ -432,7 +391,23 @@ export const GameCanvas = forwardRef<GameCanvasHandle, GameCanvasProps>(({
                     <Loader2 className="w-8 h-8 text-white animate-spin absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                 </div>
                 <div className="mt-4 font-mono text-cyan-400 text-sm tracking-[0.3em] animate-pulse">ESTABLISHING UPLINK</div>
-                <div className="mt-2 text-[10px] text-gray-500 font-mono">Connecting to Global Mesh: {roomId || '...'}</div>
+                <div className="mt-2 text-[10px] text-gray-500 font-mono">Attempting Connection (Auto-Fallback Enabled)...</div>
+            </div>
+        )}
+        
+        {engineState === 'DISCONNECTED' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center z-50 bg-black/80 backdrop-blur-sm pointer-events-none">
+                <WifiOff className="w-16 h-16 text-red-500 mb-4 animate-pulse" />
+                <h2 className="text-2xl font-black text-red-500 font-sans tracking-widest uppercase">CONNECTION LOST</h2>
+                <div className="text-sm font-mono text-gray-400 mt-2">Server signal interrupted.</div>
+            </div>
+        )}
+        
+        {engineState === 'ERROR' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center z-50 bg-black/80 backdrop-blur-sm pointer-events-none">
+                <AlertTriangle className="w-16 h-16 text-yellow-500 mb-4" />
+                <h2 className="text-2xl font-black text-yellow-500 font-sans tracking-widest uppercase">SYSTEM FAILURE</h2>
+                <div className="text-sm font-mono text-gray-400 mt-2">Critical Network Error.</div>
             </div>
         )}
     </div>

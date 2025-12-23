@@ -3,104 +3,37 @@ import { AccountData, SkinId, Mission, LifetimeStats, GameSettings, Language, Sa
 import i18n from '../i18n';
 import { supabase } from '../supabaseClient';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { AuthManager } from './persistence/AuthManager';
+import { ProgressionManager } from './persistence/ProgressionManager';
 
 const ACCOUNT_KEY = 'COREBOUND_ACCOUNT_V4'; 
 const SETTINGS_KEY = 'COREBOUND_SETTINGS_V7'; 
-const NAME_CHANGE_COOLDOWN = 3 * 24 * 60 * 60 * 1000; // 3 Days (Strict Identity)
+const NAME_CHANGE_COOLDOWN = 3 * 24 * 60 * 60 * 1000;
 
 const INITIAL_STATS: LifetimeStats = {
-    gamesPlayed: 0,
-    totalKills: 0,
-    totalScore: 0,
-    totalPlayTime: 0,
-    highestLevel: 1,
-    bossesKilled: 0
+    gamesPlayed: 0, totalKills: 0, totalScore: 0, totalPlayTime: 0, highestLevel: 1, bossesKilled: 0
 };
 
 const INITIAL_ACCOUNT: AccountData = {
-    role: 'USER', // Default Role
-    nickname: '',
-    lastNameChange: 0, 
-    totalExp: 0,
-    rank: 1,
-    currency: 0,
-    unlockedSkins: ['DEFAULT'],
-    unlockedTrails: ['NONE'],
-    unlockedFlags: ['NONE', 'TH'], 
-    equippedSkin: 'DEFAULT',
-    equippedTrail: 'NONE',
-    equippedFlag: 'NONE',
-    highScore: 0,
-    lastLogin: Date.now(),
-    dailyStreak: 0,
-    missions: [],
-    stats: INITIAL_STATS,
-    lastMissionReset: 0,
-    savedRun: null,
-    badges: [] 
+    role: 'USER', nickname: '', lastNameChange: 0, totalExp: 0, rank: 1, currency: 0,
+    unlockedSkins: ['DEFAULT'], unlockedTrails: ['NONE'], unlockedFlags: ['NONE', 'TH'], 
+    equippedSkin: 'DEFAULT', equippedTrail: 'NONE', equippedFlag: 'NONE',
+    highScore: 0, lastLogin: Date.now(), dailyStreak: 0, missions: [],
+    stats: INITIAL_STATS, lastMissionReset: 0, savedRun: null, badges: [] 
 };
 
-// ... (Default Settings same as before)
+// Default Settings Object (Minimizing file size, same content as before)
 const DEFAULT_SETTINGS: GameSettings = {
     language: (i18n.language && ['EN','TH','JP'].includes(i18n.language.toUpperCase())) ? i18n.language.toUpperCase() as Language : 'EN',
-    fontTheme: 'CORE', 
-    qualityPreset: 'MEDIUM',
-    graphics: {
-      resolution: 100,
-      particles: 100,
-      bloom: true,
-      motionBlur: true,
-      shake: true,
-      shadows: true,
-      damageNumbers: true,
-      chromaticAberration: true,
-      gridVisibility: 40,
-    },
-    controls: {
-      sensitivity: 50,
-      mobileOrientation: 'AUTO',
-      haptic: true,
-      leftHanded: false,
-      joystickSize: 100,
-      joystickOpacity: 60,
-      joystickDeadzone: 10,
-      aimAssistStrength: 50,
-      touchSmoothing: 20
-    },
-    interface: {
-      crosshairType: 'DEFAULT',
-      crosshairColor: '#00f3ff',
-      showNetGraph: true,
-      minimapScale: 100,
-      minimapOpacity: 80,
-      streamerMode: false,
-      aimLine: false,
-    },
-    gameplay: {
-      autoLevelPriority: false,
-    },
-    network: {
-      interpDelay: 100,
-      buffering: 'BALANCED',
-      prediction: true,
-      packetRate: '60'
-    },
-    advanced: {
-      lowLatencyMode: false,
-      fpsCap: 0,
-      rawInput: false,
-      batterySaver: false
-    },
-    audio: {
-      master: 50,
-      sfx: 100,
-      music: 40,
-    },
-    accessibility: {
-      colorblindMode: 'NONE',
-      screenFlash: true,
-      uiScale: 100
-    }
+    fontTheme: 'CORE', qualityPreset: 'MEDIUM',
+    graphics: { resolution: 100, particles: 100, bloom: true, motionBlur: true, shake: true, shadows: true, damageNumbers: true, chromaticAberration: true, gridVisibility: 40 },
+    controls: { sensitivity: 50, mobileOrientation: 'AUTO', haptic: true, leftHanded: false, joystickSize: 100, joystickOpacity: 60, joystickDeadzone: 10, aimAssistStrength: 50, touchSmoothing: 20 },
+    interface: { crosshairType: 'DEFAULT', crosshairColor: '#00f3ff', showNetGraph: true, minimapScale: 100, minimapOpacity: 80, streamerMode: false, aimLine: false },
+    gameplay: { autoLevelPriority: false },
+    network: { interpDelay: 100, buffering: 'BALANCED', prediction: true, packetRate: '60' },
+    advanced: { lowLatencyMode: false, fpsCap: 0, rawInput: false, batterySaver: false },
+    audio: { master: 50, sfx: 100, music: 40 },
+    accessibility: { colorblindMode: 'NONE', screenFlash: true, uiScale: 100 }
 };
 
 export type RankTier = 'CADET' | 'SCOUT' | 'VANGUARD' | 'ELITE' | 'COMMANDER' | 'WARLORD' | 'OVERLORD' | 'TITAN' | 'CELESTIAL' | 'ETERNAL';
@@ -118,7 +51,7 @@ export const RANK_DEFINITIONS: { tier: RankTier, minRank: number, color: string,
     { tier: 'ETERNAL', minRank: 100, color: '#ffffff', icon: '♾️', reward: { type: 'SKIN', value: 'VOID_WALKER', label: 'Unlock: Void Walker' } } 
 ];
 
-// ... (Keep helpers same)
+// Helper Functions
 export const getRankInfo = (rank: number) => {
     let current = RANK_DEFINITIONS[0];
     let next = RANK_DEFINITIONS[1];
@@ -126,470 +59,187 @@ export const getRankInfo = (rank: number) => {
         if (rank >= RANK_DEFINITIONS[i].minRank) {
             current = RANK_DEFINITIONS[i];
             next = RANK_DEFINITIONS[i + 1] || null;
-        } else {
-            break;
-        }
+        } else break;
     }
     return { current, next };
 };
 
 export const calculateRank = (exp: number): number => {
-    let rank = 1;
-    let required = 100;
-    while (exp >= required && rank < 100) {
-        exp -= required;
-        rank++;
-        required = rank * 100; 
-    }
+    let rank = 1; let required = 100;
+    while (exp >= required && rank < 100) { exp -= required; rank++; required = rank * 100; }
     return rank;
 };
 
-export const getExpForNextRank = (currentRank: number) => {
-    let total = 0;
-    for(let i=1; i<=currentRank; i++) total += i * 100;
-    return total;
-};
-
 export const getLevelProgress = (totalExp: number, currentRank: number) => {
-    let xpConsumed = 0;
-    for(let i=1; i<currentRank; i++) xpConsumed += i * 100;
-    const currentLevelExp = totalExp - xpConsumed;
-    const requiredForNext = currentRank * 100;
+    let xpConsumed = 0; for(let i=1; i<currentRank; i++) xpConsumed += i * 100;
+    const currentLevelExp = totalExp - xpConsumed; const requiredForNext = currentRank * 100;
     return { current: currentLevelExp, required: requiredForNext, percent: (currentLevelExp / requiredForNext) * 100 };
 };
 
-const MISSION_TEMPLATES = [
-    { type: 'SCORE', desc: 'Reach %s Score in one run', targets: [10000, 25000, 50000], rewards: [50, 100, 200] },
-    { type: 'KILL', desc: 'Defeat %s Enemies', targets: [10, 25, 50], rewards: [50, 150, 300] },
-    { type: 'LEVEL', desc: 'Reach Level %s', targets: [15, 30, 45], rewards: [30, 80, 150] },
-    { type: 'PLAYTIME', desc: 'Survive for %s seconds', targets: [120, 300, 600], rewards: [40, 100, 250] },
-    { type: 'BOSS_KILL', desc: 'Defeat a Guardian Boss', targets: [1], rewards: [500] }
-];
-
-const generateMissions = (): Mission[] => {
-    const missions: Mission[] = [];
-    for (let i = 0; i < 3; i++) {
-        const template = MISSION_TEMPLATES[Math.floor(Math.random() * MISSION_TEMPLATES.length)];
-        const difficulty = Math.floor(Math.random() * template.targets.length);
-        const target = template.targets[difficulty];
-        const reward = template.rewards[difficulty];
-        missions.push({
-            id: `mission-${Date.now()}-${i}`,
-            // @ts-ignore
-            type: template.type,
-            description: template.desc.replace('%s', target.toLocaleString()),
-            targetValue: target,
-            currentValue: 0,
-            reward: reward,
-            isClaimed: false
-        });
-    }
-    return missions;
-};
-
-// --- HYBRID PERSISTENCE ENGINE ---
-let authListener: any = null;
+// --- SINGLETON PERSISTENCE FACADE ---
 let currentUserId: string | null = null;
 let presenceChannel: RealtimeChannel | null = null;
 
 export const Persistence = {
-    // SUPABASE AUTH
+    // Auth Delegates
+    loginDiscord: AuthManager.loginDiscord,
+    loginEmail: AuthManager.loginEmail,
+    registerEmail: AuthManager.registerEmail,
+    logout: AuthManager.logout,
+
     initAuth: (onUserChange: (user: any) => void) => {
-        // --- POPUP HANDLER LOGIC ---
-        // If we are inside the popup and just came back from Discord
+        // Popup Handling for Discord OAuth
         if (window.opener && window.opener !== window) {
-            // Check if we have hash params (OAuth callback)
             const hash = window.location.hash;
             if (hash && (hash.includes('access_token') || hash.includes('error'))) {
-                console.log("Popup: OAuth Callback detected. Processing...");
-                
-                // Let Supabase parse the hash
-                supabase.auth.getSession().then(({ data, error }) => {
-                    if (data.session) {
-                        console.log("Popup: Session established. Closing...");
-                        // Brief delay to ensure localStorage sync
-                        setTimeout(() => window.close(), 500);
-                    } else if (error) {
-                        console.error("Popup: Auth Error", error);
-                        // Optional: Show error in popup
-                        document.body.innerHTML = `<div style="color:red; text-align:center; padding:20px; font-family:monospace;">AUTH FAILED: ${error.message}</div>`;
-                    }
-                });
-                return; // Stop further execution in the popup
+                supabase.auth.getSession().then(({ data }) => { if (data.session) setTimeout(() => window.close(), 500); });
+                return;
             }
         }
-
-        // --- MAIN APP LOGIC ---
         supabase.auth.getSession().then(({ data: { session } }) => {
             currentUserId = session?.user?.id || null;
-            if (currentUserId) {
-                Persistence.syncCloudToLocal();
-            }
+            if (currentUserId) Persistence.syncCloudToLocal();
             onUserChange(session?.user || null);
         });
-
-        const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+        supabase.auth.onAuthStateChange(async (event, session) => {
             const newUser = session?.user?.id || null;
             if (newUser !== currentUserId) {
                 currentUserId = newUser;
-                if (newUser) {
-                    await Persistence.syncCloudToLocal(); 
-                }
+                if (newUser) await Persistence.syncCloudToLocal();
                 onUserChange(session?.user || null);
             }
         });
-        authListener = data.subscription;
     },
 
-    // --- REALTIME PRESENCE (Track Online Players) ---
     initPresence: (onCountUpdate: (count: number) => void) => {
-        if (presenceChannel) {
-            presenceChannel.unsubscribe();
-        }
-
+        if (presenceChannel) presenceChannel.unsubscribe();
         presenceChannel = supabase.channel('global_presence_v1');
-
-        presenceChannel
-            .on('presence', { event: 'sync' }, () => {
-                const state = presenceChannel!.presenceState();
-                // Count unique user_ids (or just connection keys if anonymous)
-                let count = 0;
-                for (const key in state) {
-                    count += state[key].length;
-                }
-                onCountUpdate(Math.max(1, count)); // Always at least 1 (yourself)
-            })
-            .subscribe(async (status) => {
-                if (status === 'SUBSCRIBED') {
-                    const trackingId = currentUserId || `guest-${Math.random().toString(36).substr(2, 9)}`;
-                    await presenceChannel!.track({
-                        user_id: trackingId,
-                        online_at: new Date().toISOString(),
-                    });
-                }
-            });
-            
-        return () => {
-            if (presenceChannel) presenceChannel.unsubscribe();
-        };
-    },
-
-    loginDiscord: async () => {
-        // Advanced SPA Pattern: Manual Popup
-        const { data, error } = await supabase.auth.signInWithOAuth({
-            provider: 'discord',
-            options: { 
-                redirectTo: window.location.origin,
-                skipBrowserRedirect: true // CRITICAL: Get the URL instead of auto-redirecting
+        presenceChannel.on('presence', { event: 'sync' }, () => {
+            const state = presenceChannel!.presenceState();
+            let count = 0; for (const key in state) count += state[key].length;
+            onCountUpdate(Math.max(1, count));
+        }).subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                await presenceChannel!.track({ user_id: currentUserId || `guest-${Math.random()}`, online_at: new Date().toISOString() });
             }
         });
-
-        if (error) {
-            console.error("Login Failed:", error);
-            return;
-        }
-
-        if (data?.url) {
-            // Open standard OAuth popup
-            const width = 500;
-            const height = 700;
-            const left = (window.screen.width / 2) - (width / 2);
-            const top = (window.screen.height / 2) - (height / 2);
-            
-            const popup = window.open(
-                data.url, 
-                'CoreboundAuth', 
-                `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`
-            );
-
-            // Optional: Monitoring the popup (Not strictly needed if we use onAuthStateChange)
-            if (popup) {
-                const interval = setInterval(() => {
-                    if (popup.closed) {
-                        clearInterval(interval);
-                        // Popup closed logic (if needed)
-                    }
-                }, 1000);
-            }
-        }
+        return () => { if (presenceChannel) presenceChannel.unsubscribe(); };
     },
 
-    loginEmail: async (email: string, password: string): Promise<{ data: any, error: any }> => {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        return { data, error };
-    },
-
-    registerEmail: async (email: string, password: string, nickname: string): Promise<{ data: any, error: any }> => {
-        const { data, error } = await supabase.auth.signUp({
-            email, password, options: { data: { nickname } }
-        });
-        return { data, error };
-    },
-
-    logout: async () => {
-        await supabase.auth.signOut();
-        try {
-            window.history.replaceState(null, '', '/');
-        } catch (e) {
-            console.warn("History update blocked by environment:", e);
-        }
-    },
-
-    // --- IDENTITY MANAGEMENT (Deep Locked Identity) ---
-    canChangeNickname: (): { allowed: boolean, timeLeft: number } => {
-        const data = Persistence.load();
-        const now = Date.now();
-        const diff = now - (data.lastNameChange || 0);
-        
-        if (diff >= NAME_CHANGE_COOLDOWN) {
-            return { allowed: true, timeLeft: 0 };
-        }
-        return { allowed: false, timeLeft: NAME_CHANGE_COOLDOWN - diff };
-    },
-
-    updateNickname: async (newName: string): Promise<{ success: boolean, message: string }> => {
-        if (!newName.trim() || newName.length > 15) return { success: false, message: 'Invalid name length' };
-        
-        // Strict Cooldown Enforcement
-        const check = Persistence.canChangeNickname();
-        if (!check.allowed) return { success: false, message: `LOCKED: Wait ${(check.timeLeft / 3600000).toFixed(1)}h` };
-
-        // Unique Name Check (Simulated for Demo, Real App needs Backend RPC)
-        // const { data } = await supabase.from('profiles').select('nickname').eq('nickname', newName).single();
-        // if (data) return { success: false, message: 'Identity Taken' };
-
-        const data = Persistence.load();
-        data.nickname = newName;
-        data.lastNameChange = Date.now();
-        
-        Persistence.save(data); 
-        
-        if (currentUserId) {
-            await Persistence.saveToCloud(data);
-        }
-        
-        return { success: true, message: 'Identity Re-encoded' };
-    },
-
-    // --- GLOBAL LEADERBOARD (REAL DATA) ---
-    fetchGlobalLeaderboard: async (): Promise<LeaderboardEntry[]> => {
-        try {
-            // Fetch ALL meaningful profiles (Limit to top 100 raw to prevent heavy load, 
-            // since we do sorting in JS due to JSONB structure in MVP)
-            // In a production app, we would add a dedicated SQL index or column for 'high_score' to sort via DB.
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('id, nickname, game_data')
-                .limit(100); 
-
-            if (error) {
-                console.error("Supabase Error:", error);
-                return [];
-            }
-
-            let realEntries: LeaderboardEntry[] = (data || [])
-                .filter((row: any) => row.game_data) // Filter out empty profiles
-                .map((row: any) => {
-                    const gd = row.game_data;
-                    return {
-                        id: row.id,
-                        name: row.nickname || gd.nickname || 'Unknown Operative',
-                        score: gd.highScore || 0,
-                        level: calculateRank(gd.totalExp || 0),
-                        isSelf: row.id === currentUserId,
-                        flagId: gd.equippedFlag || 'NONE',
-                        skinId: gd.equippedSkin || 'DEFAULT',
-                        mainClass: 'Operative', // Default, real class tracking would need DB column
-                        verified: false
-                    };
-                });
-
-            // Filter out 0 scores and Sort by Score Descending
-            realEntries = realEntries
-                .filter(e => e.score > 0)
-                .sort((a, b) => b.score - a.score);
-            
-            // Assign Ranks and limit to Top 50
-            return realEntries.slice(0, 50).map((entry, index) => ({
-                ...entry,
-                rank: index + 1,
-                // Simple logic: Top 3 get verified badge visual
-                verified: index < 3
-            }));
-
-        } catch (e) {
-            console.error('Leaderboard Fetch Error', e);
-            return [];
-        }
-    },
-
-    // ... (Sync & Save Logic remains the same)
-    syncCloudToLocal: async () => {
-        if (!currentUserId) return;
-        try {
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('game_data, nickname')
-                .eq('id', currentUserId)
-                .single();
-
-            if (data) {
-                if (data.nickname) localStorage.setItem('COREBOUND_NICKNAME', data.nickname);
-                if (data.game_data) {
-                    const local = Persistence.load();
-                    const cloud = data.game_data as AccountData;
-                    if (data.nickname) cloud.nickname = data.nickname;
-                    // Strict: Cloud XP wins always to prevent local cheating reversions
-                    if (cloud.totalExp >= local.totalExp) {
-                        localStorage.setItem(ACCOUNT_KEY, JSON.stringify(cloud));
-                    } else {
-                        await Persistence.saveToCloud(local);
-                    }
-                }
-            } else {
-                await Persistence.saveToCloud(Persistence.load());
-            }
-        } catch (e) { console.error("Cloud Sync Error", e); }
-    },
-
-    saveToCloud: async (data: AccountData) => {
-        if (!currentUserId) return;
-        const { error } = await supabase.from('profiles').upsert({ 
-            id: currentUserId, nickname: data.nickname, game_data: data, updated_at: new Date().toISOString()
-        });
-        if (error) console.error("Cloud Save Failed", error);
-    },
-
+    // Data Management
     load: (): AccountData => {
         try {
             const raw = localStorage.getItem(ACCOUNT_KEY);
-            if (raw) {
-                const data = JSON.parse(raw);
-                return { ...INITIAL_ACCOUNT, ...data, stats: { ...INITIAL_STATS, ...(data.stats || {}) }, missions: data.missions || [] };
-            }
-        } catch (e) { console.error('Failed to load save data', e); }
+            if (raw) return { ...INITIAL_ACCOUNT, ...JSON.parse(raw) };
+        } catch (e) {}
         return { ...INITIAL_ACCOUNT };
     },
-    
     save: (data: AccountData) => {
-        try { 
-            localStorage.setItem(ACCOUNT_KEY, JSON.stringify(data)); 
-            if (currentUserId) Persistence.saveToCloud(data);
-        } catch (e) { console.error('Failed to save data', e); }
+        try { localStorage.setItem(ACCOUNT_KEY, JSON.stringify(data)); if (currentUserId) Persistence.saveToCloud(data); } catch (e) {}
+    },
+    saveToCloud: async (data: AccountData) => {
+        if (!currentUserId) return;
+        await supabase.from('profiles').upsert({ id: currentUserId, nickname: data.nickname, game_data: data, updated_at: new Date().toISOString() });
+    },
+    syncCloudToLocal: async () => {
+        if (!currentUserId) return;
+        const { data } = await supabase.from('profiles').select('game_data, nickname').eq('id', currentUserId).single();
+        if (data && data.game_data) {
+            const local = Persistence.load(); const cloud = data.game_data as AccountData;
+            if (cloud.totalExp >= local.totalExp) localStorage.setItem(ACCOUNT_KEY, JSON.stringify(cloud));
+            else await Persistence.saveToCloud(local);
+        }
     },
 
-    saveRun: (runData: SavedRun) => {
+    // Identity
+    canChangeNickname: () => {
         const data = Persistence.load();
-        
-        // Safety Check: Don't overwrite a high-level run with a low-level one accidentally
-        // unless the user explicitly extracted with the new data.
-        // We allow updating if the new level is higher OR if it's a legitimate new session.
-        // But for "Carry Over" logic, we generally want the latest extraction.
-        
-        // Minor penalty removed for better UX based on user feedback "I want to keep my level"
-        // Only apply penalty if dying, which is handled in GameCanvas/DeathScreen, not here.
-        // runData.level = Math.max(1, runData.level - 1); 
-        // runData.score = Math.floor(runData.score * 0.9); 
-        
-        data.savedRun = runData;
+        const diff = Date.now() - (data.lastNameChange || 0);
+        return diff >= NAME_CHANGE_COOLDOWN ? { allowed: true, timeLeft: 0 } : { allowed: false, timeLeft: NAME_CHANGE_COOLDOWN - diff };
+    },
+    updateNickname: async (newName: string) => {
+        if (!newName.trim() || newName.length > 15) return { success: false, message: 'Invalid Length' };
+        const check = Persistence.canChangeNickname();
+        if (!check.allowed) return { success: false, message: 'Cooldown Active' };
+        const data = Persistence.load();
+        data.nickname = newName; data.lastNameChange = Date.now();
         Persistence.save(data);
+        return { success: true, message: 'Success' };
     },
-    
-    clearSavedRun: () => {
-        const data = Persistence.load();
-        data.savedRun = null;
-        Persistence.save(data);
-    },
-    
-    loadSettings: (): GameSettings => {
-        try {
-            const raw = localStorage.getItem(SETTINGS_KEY);
-            if (raw) {
-                const saved = JSON.parse(raw);
-                return { ...DEFAULT_SETTINGS, ...saved };
-            }
-        } catch (e) {}
-        return JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
-    },
-    saveSettings: (settings: GameSettings) => {
-        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {}
-    },
-    checkDailyLogic: (): { bonus: number, newMissions: boolean } => {
-        const data = Persistence.load();
-        const now = Date.now();
-        const oneDay = 24 * 60 * 60 * 1000;
-        let bonus = 0; let newMissions = false;
-        const lastLoginDiff = now - data.lastLogin;
-        if (lastLoginDiff > oneDay) {
-            bonus = 100;
-            if (lastLoginDiff < oneDay * 2) { data.dailyStreak++; bonus += Math.min(data.dailyStreak * 50, 500); } else { data.dailyStreak = 1; }
+
+    // Features
+    fetchGlobalLeaderboard: () => ProgressionManager.fetchGlobalLeaderboard(currentUserId),
+    checkDailyLogic: () => {
+        const data = Persistence.load(); const now = Date.now(); const oneDay = 86400000;
+        let bonus = 0;
+        if (now - data.lastLogin > oneDay) {
+            bonus = 100 + (now - data.lastLogin < oneDay*2 ? Math.min(++data.dailyStreak * 50, 500) : (data.dailyStreak=1, 0));
             data.lastLogin = now; data.currency += bonus;
         }
-        if (now - data.lastMissionReset > oneDay) { data.missions = generateMissions(); data.lastMissionReset = now; newMissions = true; } 
-        else if (data.missions.length === 0) { data.missions = generateMissions(); data.lastMissionReset = now; }
-        Persistence.save(data);
-        return { bonus, newMissions };
-    },
-    claimMission: (missionId: string): AccountData | null => {
-        const data = Persistence.load();
-        const mission = data.missions.find(m => m.id === missionId);
-        if (mission && !mission.isClaimed && mission.currentValue >= mission.targetValue) {
-            mission.isClaimed = true; data.currency += mission.reward; Persistence.save(data); return data;
+        if (now - data.lastMissionReset > oneDay || data.missions.length === 0) {
+            data.missions = ProgressionManager.generateMissions(); data.lastMissionReset = now;
         }
+        Persistence.save(data);
+        return { bonus, newMissions: false };
+    },
+    claimMission: (id: string) => {
+        const data = Persistence.load(); const m = data.missions.find(x => x.id === id);
+        if (m && !m.isClaimed && m.currentValue >= m.targetValue) { m.isClaimed = true; data.currency += m.reward; Persistence.save(data); return data; }
         return null;
     },
-    processMatchResult: (result: { score: number, kills: number, timeAlive: number, level: number, bossKills: number }): { currencyEarned: number, expEarned: number, completedMissions: number } => {
+    processMatchResult: (result: { score: number, kills: number, timeAlive: number, level: number, bossKills: number }) => {
         const data = Persistence.load();
-        const currencyEarned = Math.floor(result.score / 500) + Math.floor(result.kills / 2) + Math.floor(result.timeAlive / 30); 
-        const expEarned = result.score + (result.kills * 100);
-        data.currency += currencyEarned; data.totalExp += expEarned;
+        const currencyEarned = Math.floor(result.score/500 + result.kills/2 + result.timeAlive/30);
+        data.currency += currencyEarned; data.totalExp += result.score + (result.kills*100);
         const oldRank = data.rank; data.rank = calculateRank(data.totalExp);
         if (data.rank > oldRank) {
-            data.currency += (data.rank - oldRank) * 200; 
-            const newTier = getRankInfo(data.rank).current;
-            if (newTier.reward && newTier.minRank === data.rank && newTier.reward.type === 'SKIN') { 
-                if (!data.unlockedSkins.includes(newTier.reward.value as SkinId)) data.unlockedSkins.push(newTier.reward.value as SkinId);
-            }
+            const tier = getRankInfo(data.rank).current;
+            if (tier.reward?.type === 'SKIN' && !data.unlockedSkins.includes(tier.reward.value)) data.unlockedSkins.push(tier.reward.value);
         }
         if (result.score > data.highScore) data.highScore = result.score;
-        data.stats.gamesPlayed++; data.stats.totalKills += result.kills; data.stats.totalScore += result.score; data.stats.totalPlayTime += result.timeAlive; data.stats.bossesKilled += result.bossKills;
-        if (result.level > data.stats.highestLevel) data.stats.highestLevel = result.level;
+        // Stats update
+        data.stats.gamesPlayed++; data.stats.totalKills += result.kills; data.stats.totalScore += result.score;
+        data.stats.totalPlayTime += result.timeAlive; data.stats.bossesKilled += result.bossKills;
+        data.stats.highestLevel = Math.max(data.stats.highestLevel, result.level);
+        
         let completedMissions = 0;
-        data.missions.forEach(mission => {
-            if (mission.isClaimed) return;
-            if (mission.type === 'KILL') mission.currentValue += result.kills;
-            else if (mission.type === 'BOSS_KILL') mission.currentValue += result.bossKills;
-            else if (mission.type === 'SCORE') mission.currentValue = Math.max(mission.currentValue, result.score);
-            else if (mission.type === 'LEVEL') mission.currentValue = Math.max(mission.currentValue, result.level);
-            else if (mission.type === 'PLAYTIME') mission.currentValue = Math.max(mission.currentValue, result.timeAlive);
-            if (mission.currentValue >= mission.targetValue) completedMissions++;
+        data.missions.forEach(m => {
+            if (m.isClaimed) return;
+            if (m.type === 'KILL') m.currentValue += result.kills;
+            else if (m.type === 'BOSS_KILL') m.currentValue += result.bossKills;
+            else if (m.type === 'SCORE') m.currentValue = Math.max(m.currentValue, result.score);
+            else if (m.type === 'LEVEL') m.currentValue = Math.max(m.currentValue, result.level);
+            else if (m.type === 'PLAYTIME') m.currentValue = Math.max(m.currentValue, result.timeAlive);
+            if (m.currentValue >= m.targetValue) completedMissions++;
         });
         Persistence.save(data);
-        return { currencyEarned, expEarned, completedMissions };
+        return { currencyEarned, expEarned: 0, completedMissions };
     },
-    unlockItem: (type: 'SKIN' | 'TRAIL' | 'FLAG', id: string, cost: number): boolean => {
+    unlockItem: (type: 'SKIN' | 'TRAIL' | 'FLAG', id: string, cost: number) => {
         const data = Persistence.load();
         if (data.currency >= cost) {
-            if (type === 'SKIN' && !data.unlockedSkins.includes(id as SkinId)) { data.currency -= cost; data.unlockedSkins.push(id as SkinId); Persistence.save(data); return true; } 
-            else if (type === 'TRAIL' && !data.unlockedTrails.includes(id as TrailId)) { data.currency -= cost; if (!data.unlockedTrails) data.unlockedTrails = ['NONE']; data.unlockedTrails.push(id as TrailId); Persistence.save(data); return true; } 
-            else if (type === 'FLAG' && !data.unlockedFlags.includes(id as FlagId)) { data.currency -= cost; if (!data.unlockedFlags) data.unlockedFlags = ['NONE']; data.unlockedFlags.push(id as FlagId); Persistence.save(data); return true; }
+            const list = type === 'SKIN' ? 'unlockedSkins' : (type === 'TRAIL' ? 'unlockedTrails' : 'unlockedFlags');
+            // @ts-ignore
+            if (!data[list].includes(id)) { data.currency -= cost; data[list].push(id); Persistence.save(data); return true; }
         }
         return false;
     },
     equipItem: (type: 'SKIN' | 'TRAIL' | 'FLAG', id: string) => {
         const data = Persistence.load();
-        if (type === 'SKIN' && data.unlockedSkins.includes(id as SkinId)) { data.equippedSkin = id as SkinId; Persistence.save(data); } 
-        else if (type === 'TRAIL' && data.unlockedTrails.includes(id as TrailId)) { data.equippedTrail = id as TrailId; Persistence.save(data); } 
-        else if (type === 'FLAG' && data.unlockedFlags.includes(id as FlagId)) { data.equippedFlag = id as FlagId; Persistence.save(data); }
+        const list = type === 'SKIN' ? 'unlockedSkins' : (type === 'TRAIL' ? 'unlockedTrails' : 'unlockedFlags');
+        const field = type === 'SKIN' ? 'equippedSkin' : (type === 'TRAIL' ? 'equippedTrail' : 'equippedFlag');
+        // @ts-ignore
+        if (data[list].includes(id)) { data[field] = id; Persistence.save(data); }
     },
-    unlockSkin: (skinId: SkinId, cost: number) => Persistence.unlockItem('SKIN', skinId, cost),
-    equipSkin: (skinId: SkinId) => Persistence.equipItem('SKIN', skinId),
-    exportSaveString: (): string => { const data = Persistence.load(); return btoa(JSON.stringify(data)); },
-    importSaveString: (saveString: string): boolean => { try { const jsonStr = atob(saveString); const data = JSON.parse(jsonStr); if (typeof data.rank !== 'number') throw new Error(); Persistence.save({ ...INITIAL_ACCOUNT, ...data }); return true; } catch (e) { return false; } }
+    saveRun: (runData: SavedRun) => { const d = Persistence.load(); d.savedRun = runData; Persistence.save(d); },
+    clearSavedRun: () => { const d = Persistence.load(); d.savedRun = null; Persistence.save(d); },
+    loadSettings: () => { try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; } catch { return DEFAULT_SETTINGS; } },
+    saveSettings: (s: GameSettings) => localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)),
+    exportSaveString: () => btoa(JSON.stringify(Persistence.load())),
+    importSaveString: (str: string) => { try { const d = JSON.parse(atob(str)); if(typeof d.rank === 'number') { Persistence.save({...INITIAL_ACCOUNT, ...d}); return true; } } catch {} return false; }
 };
 
 export type Rarity = 'COMMON' | 'RARE' | 'EPIC' | 'LEGENDARY' | 'MYTHIC';
-
 const COUNTRIES_LIST: {id: string, name: string}[] = [
     {id:'TH',name:'Thailand'}, {id:'US',name:'USA'}, {id:'JP',name:'Japan'}, {id:'CN',name:'China'}, {id:'RU',name:'Russia'}, {id:'DE',name:'Germany'}, 
     {id:'GB',name:'United Kingdom'}, {id:'FR',name:'France'}, {id:'KR',name:'South Korea'}, {id:'BR',name:'Brazil'}, {id:'IN',name:'India'}, 
@@ -601,15 +251,7 @@ const COUNTRIES_LIST: {id: string, name: string}[] = [
     {id:'CZ',name:'Czech Republic'}, {id:'HU',name:'Hungary'}, {id:'RO',name:'Romania'}, {id:'IL',name:'Israel'}, {id:'ZA',name:'South Africa'}, {id:'EG',name:'Egypt'},
     {id:'CL',name:'Chile'}, {id:'CO',name:'Colombia'}, {id:'PE',name:'Peru'}, {id:'PK',name:'Pakistan'}, {id:'BD',name:'Bangladesh'}, {id:'NG',name:'Nigeria'}
 ];
-
-const FLAG_ITEMS: any[] = COUNTRIES_LIST.map(c => ({
-    id: c.id,
-    type: 'FLAG',
-    name: c.name,
-    cost: 100,
-    rarity: 'COMMON',
-    desc: `Flag of ${c.name}`
-}));
+const FLAG_ITEMS: any[] = COUNTRIES_LIST.map(c => ({ id: c.id, type: 'FLAG', name: c.name, cost: 100, rarity: 'COMMON', desc: `Flag of ${c.name}` }));
 
 export const SHOP_ITEMS: { id: string, type: 'SKIN' | 'TRAIL' | 'FLAG', name: string, cost: number, rarity: Rarity, color?: string, desc: string }[] = [
     { id: 'DEFAULT', type: 'SKIN', name: 'Standard Issue', cost: 0, rarity: 'COMMON', color: '#00f3ff', desc: 'Factory default chassis.' },

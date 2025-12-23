@@ -5,6 +5,9 @@ import { MessageSquare, Send } from 'lucide-react';
 import { ChatMessage, GameSettings } from '../../types';
 import { soundManager } from '../../engine/SoundManager';
 
+// Fix for strict TypeScript environments where motion types might conflict
+const MotionDiv = motion.div as any;
+
 interface ChatProps {
     messages: ChatMessage[];
     onSend: (text: string) => void;
@@ -79,7 +82,7 @@ export const Chat: React.FC<ChatProps> = ({ messages, onSend, isMobile, settings
     const stopProp = (e: any) => e.stopPropagation();
 
     return (
-        <motion.div 
+        <MotionDiv 
             layout
             className={`
                 absolute bottom-24 left-4 z-40 w-64 md:w-80 flex flex-col gap-2 
@@ -119,7 +122,7 @@ export const Chat: React.FC<ChatProps> = ({ messages, onSend, isMobile, settings
                 <div ref={endRef}></div>
             </div>
 
-            <motion.div 
+            <MotionDiv 
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: showInput ? 0 : 20, opacity: showInput ? 1 : 0 }}
                 className="pointer-events-auto"
@@ -143,7 +146,7 @@ export const Chat: React.FC<ChatProps> = ({ messages, onSend, isMobile, settings
                         <Send className="w-3 h-3" />
                     </button>
                 </div>
-            </motion.div>
+            </MotionDiv>
 
             {isMobile && !showInput && (
                  <button 
@@ -153,6 +156,6 @@ export const Chat: React.FC<ChatProps> = ({ messages, onSend, isMobile, settings
                     <MessageSquare className="w-4 h-4" />
                 </button>
             )}
-        </motion.div>
+        </MotionDiv>
     );
 };

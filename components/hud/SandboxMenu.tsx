@@ -8,6 +8,9 @@ import { TankPreview } from '../TankPreview';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 
+// Fix for strict TypeScript environments where motion types might conflict
+const MotionDiv = motion.div as any;
+
 interface SandboxMenuProps {
     onClose: () => void;
     sandboxOptions: SandboxOptions;
@@ -27,7 +30,7 @@ const ToggleSwitch = ({ label, active, onClick, color = 'cyan' }: { label: strin
         >
             <span className={`text-xs md:text-sm font-mono font-bold tracking-wider ${active ? 'text-white' : 'text-gray-500'}`}>{label}</span>
             <div className={`w-12 h-6 rounded-full relative transition-colors duration-300 ${active ? 'bg-white/20' : 'bg-black/60 border border-white/10'}`}>
-                <motion.div 
+                <MotionDiv 
                     layout
                     className={`absolute top-1 left-1 w-4 h-4 rounded-full ${active ? `${activeColor} ${activeShadow}` : 'bg-gray-500'}`}
                     animate={{ x: active ? 24 : 0 }}
