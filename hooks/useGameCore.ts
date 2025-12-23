@@ -169,180 +169,187 @@ export const useGameCore = (
     }, []);
 
     const loop = useCallback(() => {
-        if (engineState !== 'READY') {
-            animationFrameId.current = requestAnimationFrame(loop);
-            return;
-        }
-    
-        const now = performance.now();
-        let fpsLimit = settings.advanced?.fpsCap || 0;
-        if (settings.advanced?.batterySaver && context.isMobile.current) fpsLimit = 30; 
+        // --- SAFETY NET: Try-Catch Block for the entire loop ---
+        try {
+            if (engineState !== 'READY') {
+                animationFrameId.current = requestAnimationFrame(loop);
+                return;
+            }
         
-        if (fpsLimit > 0) {
-            const elapsed = now - lastFrameTime.current;
-            const interval = 1000 / fpsLimit;
-            if (elapsed < interval) { animationFrameId.current = requestAnimationFrame(loop); return; }
-            lastFrameTime.current = now - (elapsed % interval);
-        } else { lastFrameTime.current = now; }
-    
-        frameCount.current++;
-        if (now - lastTime.current >= 1000) {
-            currentFps.current = frameCount.current;
-            frameCount.current = 0;
-            lastTime.current = now;
-        }
-        context.gameState.current.frames++; 
-    
-        // Extraction Logic
-        if (extractionRef.current.active) {
-            const player = context.entities.current.find(e => e.id === 'player');
-            if (player) {
-                const isMoving = Math.abs(player.velocity.x) > 0.5 || Math.abs(player.velocity.y) > 0.5;
-                const isDamaged = player.health < extractionRef.current.startHealth;
-                const isShooting = context.mouse.current.down || context.keys.current.has('KeyE');
-    
-                if (isMoving || isDamaged || isShooting) {
-                    extractionRef.current.active = false;
-                    soundManager.playUiClick(); 
-                } else {
-                    extractionRef.current.timer--;
-                    if (extractionRef.current.timer <= 0) {
+            const now = performance.now();
+            let fpsLimit = settings.advanced?.fpsCap || 0;
+            if (settings.advanced?.batterySaver && context.isMobile.current) fpsLimit = 30; 
+            
+            if (fpsLimit > 0) {
+                const elapsed = now - lastFrameTime.current;
+                const interval = 1000 / fpsLimit;
+                if (elapsed < interval) { animationFrameId.current = requestAnimationFrame(loop); return; }
+                lastFrameTime.current = now - (elapsed % interval);
+            } else { lastFrameTime.current = now; }
+        
+            frameCount.current++;
+            if (now - lastTime.current >= 1000) {
+                currentFps.current = frameCount.current;
+                frameCount.current = 0;
+                lastTime.current = now;
+            }
+            context.gameState.current.frames++; 
+        
+            // Extraction Logic
+            if (extractionRef.current.active) {
+                const player = context.entities.current.find(e => e.id === 'player');
+                if (player) {
+                    const isMoving = Math.abs(player.velocity.x) > 0.5 || Math.abs(player.velocity.y) > 0.5;
+                    const isDamaged = player.health < extractionRef.current.startHealth;
+                    const isShooting = context.mouse.current.down || context.keys.current.has('KeyE');
+        
+                    if (isMoving || isDamaged || isShooting) {
                         extractionRef.current.active = false;
-                        Persistence.saveRun({
-                            level: context.gameState.current.level,
-                            score: context.gameState.current.score,
-                            weaponId: activeWeaponId,
-                            stats: context.playerStats.current,
-                            timestamp: Date.now(),
-                            gameMode: playerProfile.gameMode
-                        });
-                        Logger.game("Extraction Successful.");
-                        onGameOver();
-                        return; 
+                        soundManager.playUiClick(); 
+                    } else {
+                        extractionRef.current.timer--;
+                        if (extractionRef.current.timer <= 0) {
+                            extractionRef.current.active = false;
+                            Persistence.saveRun({
+                                level: context.gameState.current.level,
+                                score: context.gameState.current.score,
+                                weaponId: activeWeaponId,
+                                stats: context.playerStats.current,
+                                timestamp: Date.now(),
+                                gameMode: playerProfile.gameMode
+                            });
+                            Logger.game("Extraction Successful.");
+                            onGameOver();
+                            return; 
+                        }
+                    }
+                    if (extractionRef.current.active) extractionRef.current.startHealth = player.health;
+                } else {
+                    extractionRef.current.active = false;
+                }
+            }
+        
+            // Sound Engine Update (Safe)
+            if (context.soundManager.current && context.soundManager.current.masterGain) {
+               const sm = context.soundManager.current;
+               const vol = settings.audio.master / 100;
+               // Safe assignment check
+               if (sm.masterGain && sm.masterGain.gain.value !== vol * 0.4) {
+                   sm.masterGain.gain.value = vol * 0.4;
+               }
+            }
+        
+            const net = context.network.current;
+        
+            const handleDeath = (killerName: string) => {
+                Persistence.clearSavedRun();
+                extractionRef.current.active = false; 
+        
+                const finalScore = context.gameState.current.score;
+                const timeAlive = (Date.now() / 1000) - sessionStats.current.startTime;
+                
+                let rewards = { currencyEarned: 0, expEarned: 0, completedMissions: 0 };
+                if (playerProfile.gameMode !== 'Sandbox') {
+                    rewards = Persistence.processMatchResult({
+                        score: finalScore, kills: sessionStats.current.kills,
+                        timeAlive: timeAlive, level: context.gameState.current.level,
+                        bossKills: sessionStats.current.bossKills
+                    });
+                }
+        
+                Logger.game(`Player died. Score: ${finalScore}, Killer: ${killerName}`);
+                
+                const player = context.entities.current.find(e => e.id === 'player');
+                if (player) spawnLoot(context, player.position, finalScore);
+        
+                setDeathInfo({ killer: killerName, score: finalScore, level: context.gameState.current.level, currencyEarned: rewards.currencyEarned });
+                soundManager.playExplosion();
+            };
+        
+            const onKill = (type: EntityType, isBoss: boolean = false) => {
+                if (type === EntityType.PLAYER || type === EntityType.ENEMY) {
+                    sessionStats.current.kills++;
+                    if (isBoss) {
+                        sessionStats.current.bossKills++; 
+                        Logger.game('BOSS DOWN!');
+                    }
+                    
+                    context.gameState.current.killStreak++;
+                    context.gameState.current.streakTimer = 600; 
+                    
+                    const streak = context.gameState.current.killStreak;
+                    if (streak >= 2) {
+                        soundManager.playKillConfirm(); 
+                        if (streak >= 5) soundManager.playExplosion(); 
                     }
                 }
-                if (extractionRef.current.active) extractionRef.current.startHealth = player.health;
+            };
+        
+            if (net.role === 'CLIENT') {
+                net.sendInput({
+                    keys: Array.from(context.keys.current),
+                    mouse: { x: context.mouse.current.x + context.camera.current.x - window.innerWidth/2, y: context.mouse.current.y + context.camera.current.y - window.innerHeight/2, down: context.mouse.current.down, rightDown: context.mouse.current.rightDown },
+                    angle: context.playerTargetRotation.current,
+                    skillActive: context.keys.current.has('KeyF') || context.skillButton.current.active
+                });
+        
+                const prediction = settings.network?.prediction !== false;
+                const interpDelay = settings.network?.interpDelay || 100;
+                net.applySnapshot(context, prediction, interpDelay);
+        
+                updatePhysics(context, activeWeaponId, onLevelUp, handleDeath, onKill);
+        
             } else {
-                extractionRef.current.active = false;
-            }
-        }
-    
-        // Sound Engine Update (Safe)
-        if (context.soundManager.current && context.soundManager.current.masterGain) {
-           const sm = context.soundManager.current;
-           const vol = settings.audio.master / 100;
-           // Safe assignment check
-           if (sm.masterGain && sm.masterGain.gain.value !== vol * 0.4) {
-               sm.masterGain.gain.value = vol * 0.4;
-           }
-        }
-    
-        const net = context.network.current;
-    
-        const handleDeath = (killerName: string) => {
-            Persistence.clearSavedRun();
-            extractionRef.current.active = false; 
-    
-            const finalScore = context.gameState.current.score;
-            const timeAlive = (Date.now() / 1000) - sessionStats.current.startTime;
-            
-            let rewards = { currencyEarned: 0, expEarned: 0, completedMissions: 0 };
-            if (playerProfile.gameMode !== 'Sandbox') {
-                rewards = Persistence.processMatchResult({
-                    score: finalScore, kills: sessionStats.current.kills,
-                    timeAlive: timeAlive, level: context.gameState.current.level,
-                    bossKills: sessionStats.current.bossKills
-                });
-            }
-    
-            Logger.game(`Player died. Score: ${finalScore}, Killer: ${killerName}`);
-            
-            const player = context.entities.current.find(e => e.id === 'player');
-            if (player) spawnLoot(context, player.position, finalScore);
-    
-            setDeathInfo({ killer: killerName, score: finalScore, level: context.gameState.current.level, currencyEarned: rewards.currencyEarned });
-            soundManager.playExplosion();
-        };
-    
-        const onKill = (type: EntityType, isBoss: boolean = false) => {
-            if (type === EntityType.PLAYER || type === EntityType.ENEMY) {
-                sessionStats.current.kills++;
-                if (isBoss) {
-                    sessionStats.current.bossKills++; 
-                    Logger.game('BOSS DOWN!');
+                // HOST or OFFLINE Logic
+                if (net.role === 'HOST') {
+                    net.connections.forEach(conn => {
+                        const exists = context.entities.current.find(e => e.ownerId === conn.peer);
+                        if (!exists) {
+                            context.entities.current.push(recycleEntity(context, {
+                                id: `player-${conn.peer}`, type: EntityType.PLAYER,
+                                position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, radius: 24, rotation: 0,
+                                health: 100, maxHealth: 100, color: COLORS.player, depth: 10,
+                                name: `Operative ${conn.peer.substr(0,4)}`, weaponId: 'basic', teamId: 1, ownerId: conn.peer,
+                                barrelRecoils: [0], score: 0, level: 1
+                            }));
+                        }
+                    });
+                }
+        
+                updatePhysics(context, activeWeaponId, onLevelUp, handleDeath, onKill);
+                
+                // Particle Cleanup
+                for (let i = context.particles.current.length - 1; i >= 0; i--) { 
+                    const p = context.particles.current[i]; 
+                    if (p.type === 'muzzle_flash') p.life -= 0.15; 
+                    else { 
+                        p.life -= 0.02; 
+                        if (p.type === 'text') p.velocity.y += 0.1;
+                        else { p.velocity.x *= 0.94; p.velocity.y *= 0.94; }
+                        if (p.type === 'debris') {
+                            p.velocity.x *= 0.92; p.velocity.y *= 0.92; p.rotation = (p.rotation || 0) + (p.rotationSpeed || 0);
+                        }
+                    } 
+                    p.position.x += p.velocity.x; p.position.y += p.velocity.y;
+                    if (p.life <= 0) removeParticle(context, i); 
                 }
                 
-                context.gameState.current.killStreak++;
-                context.gameState.current.streakTimer = 600; 
-                
-                const streak = context.gameState.current.killStreak;
-                if (streak >= 2) {
-                    soundManager.playKillConfirm(); 
-                    if (streak >= 5) soundManager.playExplosion(); 
+                for (let i = context.shockwaves.current.length - 1; i >= 0; i--) {
+                    const wave = context.shockwaves.current[i];
+                    wave.life -= 0.03;
+                    wave.radius += (wave.maxRadius - wave.radius) * 0.1;
+                    if (wave.life <= 0) context.shockwaves.current.splice(i, 1);
                 }
+        
+                const hostPlayer = context.entities.current.find(e => e.id === 'player');
+                if (hostPlayer) hostPlayer.score = context.gameState.current.score;
+        
+                if (net.role === 'HOST') net.broadcastSnapshot(context.entities.current, context.particles.current);
             }
-        };
-    
-        if (net.role === 'CLIENT') {
-            net.sendInput({
-                keys: Array.from(context.keys.current),
-                mouse: { x: context.mouse.current.x + context.camera.current.x - window.innerWidth/2, y: context.mouse.current.y + context.camera.current.y - window.innerHeight/2, down: context.mouse.current.down, rightDown: context.mouse.current.rightDown },
-                angle: context.playerTargetRotation.current,
-                skillActive: context.keys.current.has('KeyF') || context.skillButton.current.active
-            });
-    
-            const prediction = settings.network?.prediction !== false;
-            const interpDelay = settings.network?.interpDelay || 100;
-            net.applySnapshot(context, prediction, interpDelay);
-    
-            updatePhysics(context, activeWeaponId, onLevelUp, handleDeath, onKill);
-    
-        } else {
-            // HOST or OFFLINE Logic
-            if (net.role === 'HOST') {
-                net.connections.forEach(conn => {
-                    const exists = context.entities.current.find(e => e.ownerId === conn.peer);
-                    if (!exists) {
-                        context.entities.current.push(recycleEntity(context, {
-                            id: `player-${conn.peer}`, type: EntityType.PLAYER,
-                            position: { x: 0, y: 0 }, velocity: { x: 0, y: 0 }, radius: 24, rotation: 0,
-                            health: 100, maxHealth: 100, color: COLORS.player, depth: 10,
-                            name: `Operative ${conn.peer.substr(0,4)}`, weaponId: 'basic', teamId: 1, ownerId: conn.peer,
-                            barrelRecoils: [0], score: 0, level: 1
-                        }));
-                    }
-                });
-            }
-    
-            updatePhysics(context, activeWeaponId, onLevelUp, handleDeath, onKill);
-            
-            // Particle Cleanup
-            for (let i = context.particles.current.length - 1; i >= 0; i--) { 
-                const p = context.particles.current[i]; 
-                if (p.type === 'muzzle_flash') p.life -= 0.15; 
-                else { 
-                    p.life -= 0.02; 
-                    if (p.type === 'text') p.velocity.y += 0.1;
-                    else { p.velocity.x *= 0.94; p.velocity.y *= 0.94; }
-                    if (p.type === 'debris') {
-                        p.velocity.x *= 0.92; p.velocity.y *= 0.92; p.rotation = (p.rotation || 0) + (p.rotationSpeed || 0);
-                    }
-                } 
-                p.position.x += p.velocity.x; p.position.y += p.velocity.y;
-                if (p.life <= 0) removeParticle(context, i); 
-            }
-            
-            for (let i = context.shockwaves.current.length - 1; i >= 0; i--) {
-                const wave = context.shockwaves.current[i];
-                wave.life -= 0.03;
-                wave.radius += (wave.maxRadius - wave.radius) * 0.1;
-                if (wave.life <= 0) context.shockwaves.current.splice(i, 1);
-            }
-    
-            const hostPlayer = context.entities.current.find(e => e.id === 'player');
-            if (hostPlayer) hostPlayer.score = context.gameState.current.score;
-    
-            if (net.role === 'HOST') net.broadcastSnapshot(context.entities.current, context.particles.current);
+        } catch (error) {
+            console.error("Critical Loop Error caught:", error);
+            // Optional: You could set engineState to 'ERROR' here if you want to stop the loop,
+            // but for resilience, logging and continuing next frame is often better for minor glitches.
         }
     
         animationFrameId.current = requestAnimationFrame(loop);
