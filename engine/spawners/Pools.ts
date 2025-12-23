@@ -5,7 +5,7 @@ import { GameContext } from '../GameContext';
 export const recycleEntity = (ctx: GameContext, base: Partial<Entity>): Entity => {
     let e: Entity;
     
-    // Default structure to ensure no undefined crashes
+    // Default structure to prevent "undefined reading x" crashes
     const defaults = {
         position: { x: 0, y: 0 },
         velocity: { x: 0, y: 0 },
@@ -24,7 +24,7 @@ export const recycleEntity = (ctx: GameContext, base: Partial<Entity>): Entity =
     if (ctx.deadEntities.current.length > 0) {
         e = ctx.deadEntities.current.pop()!;
         
-        // Reset dirty properties
+        // Clear dirty properties
         e.statusEffects = [];
         e.barrelRecoils = undefined;
         e.ownerId = undefined;
@@ -38,15 +38,16 @@ export const recycleEntity = (ctx: GameContext, base: Partial<Entity>): Entity =
         e.chatText = undefined;
         e.chatTimer = undefined;
         
-        // Apply new values over existing object
+        // Merge defaults -> then base values
+        // This ensures e.position is NEVER undefined
         Object.assign(e, defaults, base);
         
-        // Safety check for nested objects
+        // Double safety check
         if (!e.position) e.position = { x: 0, y: 0 };
         if (!e.velocity) e.velocity = { x: 0, y: 0 };
         
     } else {
-        // Create fresh with defaults merged
+        // Create fresh
         e = { ...defaults, ...base } as Entity;
     }
     
@@ -69,6 +70,7 @@ export const recycleParticle = (ctx: GameContext, base: Partial<Particle>): Part
     if (ctx.deadParticles.current.length > 0) {
         p = ctx.deadParticles.current.pop()!;
         Object.assign(p, defaults, base);
+        // Safety checks
         if (!p.position) p.position = { x: 0, y: 0 };
         if (!p.velocity) p.velocity = { x: 0, y: 0 };
     } else {
@@ -80,7 +82,6 @@ export const recycleParticle = (ctx: GameContext, base: Partial<Particle>): Part
 export const removeEntity = (ctx: GameContext, index: number) => {
     if (index < 0 || index >= ctx.entities.current.length) return;
     const e = ctx.entities.current[index];
-    // Fast remove (Swap with last) to prevent array splice performance hit
     const last = ctx.entities.current[ctx.entities.current.length - 1];
     ctx.entities.current[index] = last;
     ctx.entities.current.pop();

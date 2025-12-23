@@ -17,10 +17,10 @@ export class SoundManager {
     isInitialized: boolean = false;
 
     constructor() {
-        // Do nothing in constructor to prevent auto-play policy errors on import
+        // Do nothing on constructor to avoid AutoPlay errors
     }
 
-    // Call this on first user interaction to unlock audio context
+    // Call this on first user interaction (click/tap)
     initialize() {
         if (this.isInitialized) {
             this.resume();
@@ -32,11 +32,9 @@ export class SoundManager {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             this.ctx = new AudioContext();
             
-            // 1. Master Chain: Master Gain -> Limiter -> Destination
             this.masterGain = this.ctx.createGain();
             this.masterGain.gain.value = 0.4; 
 
-            // Limiter (Safety & Glue)
             this.limiter = this.ctx.createDynamicsCompressor();
             this.limiter.threshold.value = -12; 
             this.limiter.knee.value = 30;       
@@ -44,17 +42,14 @@ export class SoundManager {
             this.limiter.attack.value = 0.003;  
             this.limiter.release.value = 0.25;  
 
-            // 2. Reverb System (The "AAA" Space)
             this.reverbNode = this.ctx.createConvolver();
             this.reverbNode.buffer = this.generateImpulseResponse(1.5, 2.0); 
             this.reverbGain = this.ctx.createGain();
             this.reverbGain.gain.value = 0.35; 
 
-            // Routing
             this.masterGain.connect(this.limiter);
             this.limiter.connect(this.ctx.destination);
             
-            // Pre-generate assets
             this.noiseBuffer = this.createNoiseBuffer(false); 
             this.pinkNoiseBuffer = this.createNoiseBuffer(true); 
             this.softClipCurve = this.createSoftClipCurve(4.0); 
@@ -62,7 +57,7 @@ export class SoundManager {
             this.isInitialized = true;
             console.log("[AUDIO] System Initialized");
         } catch (e) {
-            console.warn("[AUDIO] Initialization failed (likely no hardware):", e);
+            console.warn("[AUDIO] Initialization failed:", e);
         }
     }
 
@@ -168,7 +163,6 @@ export class SoundManager {
     }
 
     playUiClick() {
-        // Ensure initialized on click
         if (!this.isInitialized) this.initialize();
         if (this.isMuted || !this.ctx || !this.masterGain) return;
         
@@ -294,7 +288,6 @@ export class SoundManager {
             noise.start(now); noise.stop(now + 0.35);
         } 
         else {
-            // Generic fallback for safety if detailed profiles fail or complex logic
             const osc = this.ctx.createOscillator();
             osc.type = 'triangle';
             osc.frequency.setValueAtTime(300, now);
