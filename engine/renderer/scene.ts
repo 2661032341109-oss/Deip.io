@@ -65,6 +65,9 @@ export const drawScene = (gameCtx: GameContext) => {
     const useChromatic = settings.graphics.chromaticAberration && !isMobile;
     
     gameCtx.entities.current.sort((a,b) => a.depth - b.depth).forEach(e => {
+       // CRITICAL FIX: Ensure position exists before accessing .x or .y
+       if (!e.position) return;
+
        const x = e.position.x - camOffset.x; const y = e.position.y - camOffset.y;
        const cullRadius = e.type === EntityType.ZONE || e.type === EntityType.WALL ? Math.max(e.width||0, e.height||0)/2 : e.radius;
        if (x < -cullRadius - 100 || x > window.innerWidth + cullRadius + 100 || y < -cullRadius - 100 || y > window.innerHeight + cullRadius + 100) return;
@@ -354,6 +357,9 @@ export const drawScene = (gameCtx: GameContext) => {
 
     gameCtx.particles.current.forEach((p) => {
        if (p.life <= 0) return;
+       // Critical Check
+       if (!p.position) return; 
+
        if (settings.graphics.damageNumbers && p.type === 'text' && p.text && /^\d+$/.test(p.text)) return; 
        const px = p.position.x - camOffset.x; const py = p.position.y - camOffset.y;
        
