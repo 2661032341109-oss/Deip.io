@@ -27,18 +27,22 @@ export class NetworkManager {
     private pingInterval: any = null;
 
     constructor() {
-        // Setup Colyseus Client
-        const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-        let host = window.location.hostname === 'localhost' ? 'localhost:2567' : window.location.host;
-        
-        // Fallback if host is empty (e.g. running from file:// or some web containers)
-        if (!host || host === '') {
-            console.warn("NetworkManager: Hostname detection failed (possibly file://), defaulting to localhost:2567");
-            host = 'localhost:2567';
-        }
-
         try {
-            this.client = new Client(`${protocol}://${host}`);
+            // Setup Colyseus Client
+            // Robust host detection for various environments (Web, file://, cloud IDEs)
+            const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            let host = window.location.hostname === 'localhost' ? 'localhost:2567' : window.location.host;
+            
+            // Fallback for file:// or malformed location
+            if (!host || host === '' || window.location.protocol === 'file:') {
+                console.warn("NetworkManager: Hostname detection failed (possibly file://), defaulting to localhost:2567");
+                host = 'localhost:2567';
+            }
+
+            const url = `${protocol}://${host}`;
+            console.log(`NetworkManager: Initializing Client with URL: ${url}`);
+            
+            this.client = new Client(url);
         } catch (e) {
             console.error("NetworkManager: Failed to initialize Client.", e);
             this.client = null;
@@ -154,7 +158,7 @@ export class NetworkManager {
                     reject(e);
                 }
             } else {
-                 reject(new Error("Client not initialized (invalid host configuration)"));
+                 reject(new Error("Client not initialized (invalid host configuration or URL)"));
             }
         });
     }
